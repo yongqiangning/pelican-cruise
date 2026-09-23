@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "鹈鹕骑单车 · 新标签页",
+  "version": "1.0.0",
+  "description": "新建标签页换成一只戴头盔的鹈鹕沿海岸线骑车的实时 3D 画面：无界面、自动巡航、不联网、低占用。",
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "minimum_chrome_version": "102"
+}
