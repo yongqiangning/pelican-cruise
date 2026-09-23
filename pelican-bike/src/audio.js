@@ -10,6 +10,17 @@ export class AudioEngine {
     this.volume = 0.8;
     this.musicVolume = 0.55;
     this.sfxVolume = 0.9;
+    // 环境音（海浪 + 风声）单独控制：0 就是彻底关掉
+    this.envVolume = 0.5;
+    this.envOn = true;
+    // 自定义背景音乐（用户上传）
+    this.tracks = [];
+    this.trackIdx = 0;
+    this.customOn = false;
+    this.customEl = null;
+    this.customSrc = null;
+    this.customGain = null;
+    this.trackName = '';
   }
 
   start() {
@@ -38,15 +49,28 @@ export class AudioEngine {
     this.sfx = ctx.createGain();
     this.sfx.gain.value = this.sfxVolume;
     this.sfx.connect(this.master);
+
+    // 音乐总线：生成式与自定义音乐共用一个低通，削掉刺耳高频，整体更柔和
+    this.musicFilter = ctx.createBiquadFilter();
+    this.musicFilter.type = 'lowpass';
+    this.musicFilter.frequency.value = 2400;
+    this.musicFilter.Q.value = 0.3;
+    this.musicFilter.connect(this.master);
+
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = this.musicVolume;
-    this.musicBus.connect(this.master);
+    this.musicBus.gain.value = this.musicOn ? this.musicVolume : 0;
+    this.musicBus.connect(this.musicFilter);
     const mSend = ctx.createGain();
     mSend.gain.value = 0.5;
     this.musicBus.connect(mSend).connect(this.reverb);
 
     this.noise = this.noiseBuffer();
     this.brown = this.brownBuffer();
+
+    // 环境音总线：海浪与风声都从这里过，方便整体调音量或一键关掉
+    this.envBus = ctx.createGain();
+    this.envBus.gain.value = this.envOn ? this.envVolume : 0;
+    this.envBus.connect(this.sfx);
 
     // 风声
     this.wind = this.loop(this.noise);
@@ -55,7 +79,7 @@ export class AudioEngine {
     this.windFilter.Q.value = 0.6;
     this.windGain = ctx.createGain();
     this.windGain.gain.value = 0;
-    this.wind.connect(this.windFilter).connect(this.windGain).connect(this.sfx);
+    this.wind.connect(this.windFilter).connect(this.windGain).connect(this.envBus);
 
     // 胎噪
     this.roll = this.loop(this.brown);
@@ -70,26 +94,28 @@ export class AudioEngine {
     this.surf = this.loop(this.brown);
     const surfF = ctx.createBiquadFilter();
     surfF.type = 'lowpass';
-    surfF.frequency.value = 700;
+    surfF.frequency.value = 620;
     this.surfGain = ctx.createGain();
-    this.surfGain.gain.value = 0.12;
+    this.surfGain.gain.value = 0.09;
     const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.11;
+    lfo.frequency.value = 0.1;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.08;
+    lfoGain.gain.value = 0.055;
     lfo.connect(lfoGain).connect(this.surfGain.gain);
     lfo.start();
     const pan = ctx.createStereoPanner();
     pan.pan.value = -0.6;
-    this.surf.connect(surfF).connect(this.surfGain).connect(pan).connect(this.sfx);
+    this.surf.connect(surfF).connect(this.surfGain).connect(pan).connect(this.envBus);
 
     this.nextTick = 0;
     this.enabled = true;
     // 音乐调度
     this.step = 0;
-    this.nextNote = ctx.currentTime + 0.3;
-    this.timer = setInterval(() => this.schedule(), 25);
-    this.nextGull = ctx.currentTime + 4;
+    this.nextNote = ctx.currentTime + 0.5;
+    this.timer = setInterval(() => this.schedule(), 40);
+    this.nextGull = ctx.currentTime + 8;
+    // 用户已经选过自定义音乐（比如切画质重建了引擎）就接着放
+    if (this.tracks.length && this.customOn) this.playCustom();
   }
 
   impulse(sec, decay) {
@@ -137,11 +163,44 @@ export class AudioEngine {
   }
   setMusicVolume(v) {
     this.musicVolume = v;
-    if (this.musicBus) this.musicBus.gain.setTargetAtTime(this.musicOn ? v : 0, this.ctx.currentTime, 0.1);
+    this.applyMusicGains();
+  }
+  // 海浪 + 风声音量（0~1，0 等价于关闭）
+  setEnvVolume(v) {
+    this.envVolume = v;
+    this.applyEnvGain();
+  }
+  setEnv(on) {
+    this.envOn = on;
+    this.applyEnvGain();
+  }
+  applyEnvGain() {
+    if (!this.ctx || !this.envBus) return;
+    const v = this.envOn ? this.envVolume : 0;
+    // 淡入淡出，避免拖动滑块时爆音
+    this.envBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.12);
   }
   setMusic(on) {
     this.musicOn = on;
-    this.setMusicVolume(this.musicVolume);
+    this.applyMusicGains();
+    // 关掉音乐时把自定义曲目也停下来，省电也避免偷偷播
+    if (!on) this.customEl?.pause();
+    else if (this.customOn && this.tracks.length) this.playCustom();
+  }
+  // 自定义音乐与生成式音乐互斥，谁在放谁占音乐音量
+  applyMusicGains() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const v = this.musicOn ? this.musicVolume : 0;
+    const custom = this.customOn && this.tracks.length > 0;
+    this.musicBus?.gain.setTargetAtTime(custom ? 0 : v, t, 0.25);
+    this.customGain?.gain.setTargetAtTime(custom ? v : 0, t, 0.25);
+  }
+  setCustomOn(on) {
+    this.customOn = !!on && this.tracks.length > 0;
+    this.applyMusicGains();
+    if (this.customOn && this.musicOn) this.playCustom();
+    else this.customEl?.pause();
   }
   mute(m) {
     if (!this.ctx) return;
@@ -149,23 +208,86 @@ export class AudioEngine {
     else this.ctx.resume();
   }
 
+  // ------- 自定义背景音乐：用户上传的本地音频 -------
+  // 元素接进 WebAudio 总线，主音量 / 音乐音量 / 静音都能一起生效
+  loadCustomMusic(files) {
+    if (!this.ctx) return false;
+    const list = [...files].filter(
+      (f) => (f.type || '').startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|wma)$/i.test(f.name || ''),
+    );
+    if (!list.length) return false;
+    this.clearCustomMusic();
+    this.tracks = list.map((f) => ({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f) }));
+    this.trackIdx = 0;
+    const el = new Audio();
+    el.preload = 'auto';
+    el.volume = 1;
+    el.addEventListener('ended', () => this.nextTrack());
+    el.addEventListener('error', () => this.nextTrack());
+    this.customEl = el;
+    if (!this.customGain) {
+      // 用户自己的歌不加低通也不加混响，直接进主音量
+      this.customGain = this.ctx.createGain();
+      this.customGain.gain.value = 0;
+      this.customGain.connect(this.master);
+    }
+    this.customSrc = this.ctx.createMediaElementSource(el);
+    this.customSrc.connect(this.customGain);
+    this.customOn = true;
+    this.trackName = this.tracks[0].name;
+    this.applyMusicGains();
+    if (this.musicOn) this.playCustom();
+    return true;
+  }
+  playCustom() {
+    if (!this.customEl || !this.tracks.length) return;
+    const track = this.tracks[this.trackIdx % this.tracks.length];
+    this.trackName = track.name;
+    if (this.customEl.src !== track.url) this.customEl.src = track.url;
+    const p = this.customEl.play();
+    // 自动播放被浏览器拦下（没有用户手势）时先静音，等下一次手势再补上
+    if (p?.catch) p.catch(() => this.applyMusicGains());
+  }
+  nextTrack() {
+    if (!this.tracks.length) return;
+    this.trackIdx = (this.trackIdx + 1) % this.tracks.length;
+    if (this.customOn && this.musicOn) this.playCustom();
+  }
+  clearCustomMusic() {
+    if (this.customEl) {
+      this.customEl.pause();
+      this.customEl.removeAttribute('src');
+      this.customEl.load?.();
+      this.customEl = null;
+    }
+    this.customSrc?.disconnect?.();
+    this.customSrc = null;
+    for (const t of this.tracks) URL.revokeObjectURL(t.url);
+    this.tracks = [];
+    this.trackIdx = 0;
+    this.customOn = false;
+    this.trackName = '';
+    this.applyMusicGains();
+  }
+
   update(p) {
     Object.assign(this.params, p);
     if (!this.enabled) return;
     const t = this.ctx.currentTime;
     const v = p.speed;
-    this.windGain.gain.setTargetAtTime(Math.min(0.5, v * v * 0.0022), t, 0.2);
-    this.windFilter.frequency.setTargetAtTime(250 + v * 70, t, 0.2);
-    this.rollGain.gain.setTargetAtTime(p.airborne ? 0 : Math.min(0.35, v * 0.028), t, 0.05);
-    this.rollFilter.frequency.setTargetAtTime(160 + v * 22, t, 0.2);
+    this.windGain.gain.setTargetAtTime(Math.min(0.3, v * v * 0.0016), t, 0.25);
+    this.windFilter.frequency.setTargetAtTime(220 + v * 55, t, 0.25);
+    this.rollGain.gain.setTargetAtTime(p.airborne ? 0 : Math.min(0.22, v * 0.02), t, 0.05);
+    this.rollFilter.frequency.setTargetAtTime(150 + v * 18, t, 0.25);
     // 滑行时的飞轮棘轮声
     if (!p.pedaling && v > 0.5 && t > this.nextTick) {
-      this.click(t, 0.05);
+      this.click(t, 0.03);
       this.nextTick = t + Math.max(0.012, 0.35 / v);
     }
+    // 海鸥只是偶尔远远叫一声，别太吵
     if (t > this.nextGull) {
       this.gull(t);
-      this.nextGull = t + 7 + Math.random() * 12;
+      this.nextGull = t + 15 + Math.random() * 25;
     }
   }
 
@@ -250,19 +372,6 @@ export class AudioEngine {
     vib.stop(t + 0.55);
   }
 
-  gulp(golden) {
-    if (!this.enabled) return;
-    const t = this.ctx.currentTime;
-    this.tone({ freq: 420, glide: 90, t, dur: 0.18, vol: 0.35 });
-    this.tone({ freq: 260, glide: 70, t: t + 0.12, dur: 0.2, vol: 0.25 });
-    // 收集音：五声音阶上行琶音
-    const notes = golden ? [79, 83, 86, 91, 95] : [76, 81, 88];
-    notes.forEach((n, i) => {
-      const g = this.tone({ freq: midi(n), t: t + 0.05 + i * 0.07, dur: 0.6, vol: 0.12, type: 'triangle' });
-      g.connect(this.reverb);
-    });
-  }
-
   splash() {
     if (!this.enabled) return;
     const ctx = this.ctx;
@@ -310,116 +419,87 @@ export class AudioEngine {
 
   gull(t) {
     const ctx = this.ctx;
-    const n = 2 + Math.floor(Math.random() * 3);
+    const n = 1 + Math.floor(Math.random() * 2);
     const pan = ctx.createStereoPanner();
     pan.pan.value = -0.3 - Math.random() * 0.6;
     const out = ctx.createGain();
-    out.gain.value = 0.05;
+    out.gain.value = 0.025;
     out.connect(pan).connect(this.sfx);
     out.connect(this.reverb);
     for (let i = 0; i < n; i++) {
-      const s = t + i * 0.28;
+      const s = t + i * 0.3;
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
-      o.frequency.setValueAtTime(1500, s);
-      o.frequency.exponentialRampToValueAtTime(2300, s + 0.06);
-      o.frequency.exponentialRampToValueAtTime(1100, s + 0.22);
+      o.frequency.setValueAtTime(1400, s);
+      o.frequency.exponentialRampToValueAtTime(2100, s + 0.07);
+      o.frequency.exponentialRampToValueAtTime(1050, s + 0.24);
       const f = ctx.createBiquadFilter();
       f.type = 'bandpass';
       f.frequency.value = 2000;
-      f.Q.value = 3;
+      f.Q.value = 2.4;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, s);
-      g.gain.exponentialRampToValueAtTime(1, s + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.24);
+      g.gain.exponentialRampToValueAtTime(1, s + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.26);
       o.connect(f).connect(g).connect(out);
       o.start(s);
-      o.stop(s + 0.3);
+      o.stop(s + 0.32);
     }
   }
 
-  // ------- 生成式音乐：速度跟随踏频 -------
+  // ------- 生成式氛围乐：慢速铺底 + 稀疏点缀，全程没有鼓点 -------
+  // 一拍 1.4 秒、八拍换一次和弦，音符淡入淡出都在 3 秒上下，听感是一片流动的和声而不是旋律
   schedule() {
-    if (!this.enabled || !this.musicOn) return;
+    if (!this.enabled || !this.musicOn || this.customOn) return;
     const ctx = this.ctx;
-    const bpm = Math.min(126, Math.max(72, this.params.cadence || 84));
-    const sixteenth = 60 / bpm / 4;
+    const stepDur = 1.4;
     // 音乐关闭/后台期间不补发积压的音符
-    if (this.nextNote < ctx.currentTime) this.nextNote = ctx.currentTime + 0.05;
-    while (this.nextNote < ctx.currentTime + 0.12) {
-      this.playStep(this.step, this.nextNote, sixteenth);
-      const swing = this.step % 2 ? 0.92 : 1.08;
-      this.nextNote += sixteenth * swing;
+    if (this.nextNote < ctx.currentTime) this.nextNote = ctx.currentTime + 0.2;
+    while (this.nextNote < ctx.currentTime + 0.7) {
+      this.playStep(this.step, this.nextNote, stepDur);
+      this.nextNote += stepDur;
       this.step = (this.step + 1) % 256;
     }
   }
 
   playStep(step, t, dur) {
-    const night = this.params.night;
-    // D 大调：Dmaj9 - Bm9 - Gmaj9 - A13
+    // C 大调 / A 小调色彩：Am9 - Fmaj9 - Cmaj9 - G6/9
     const chords = [
-      [50, 57, 61, 64, 66],
-      [47, 54, 57, 61, 62],
-      [43, 50, 54, 57, 59],
-      [45, 52, 55, 59, 61],
+      [45, 64, 67, 71, 72],
+      [41, 60, 64, 67, 72],
+      [43, 62, 64, 67, 71],
+      [43, 59, 62, 67, 69],
     ];
-    const bar = Math.floor(step / 16) % 4;
-    const s = step % 16;
-    const ch = chords[bar];
     const bus = this.musicBus;
+    const night = this.params.night;
+    const bar = Math.floor(step / 8) % chords.length;
+    const s = step % 8;
+    const ch = chords[bar];
+    const pad = dur * 9;
     if (s === 0) {
-      // 柔和铺底和弦
+      // 铺底和弦：每个音都错开一点点进入，像海面上的雾
       ch.forEach((n, i) => {
-        const g = this.tone({ freq: midi(n + 12), type: 'triangle', t, dur: dur * 16, vol: 0.045, attack: 0.4, dest: bus, detune: (i % 2 ? 6 : -6) });
-        void g;
+        this.tone({
+          freq: midi(n),
+          type: i % 2 ? 'triangle' : 'sine',
+          t: t + i * 0.25,
+          dur: pad,
+          vol: 0.028,
+          attack: 3.4,
+          dest: bus,
+          detune: i % 2 ? 7 : -7,
+        });
+        this.tone({ freq: midi(n) * 2.003, type: 'sine', t: t + 0.6, dur: pad * 0.7, vol: 0.007, attack: 4.2, dest: bus });
       });
-      this.tone({ freq: midi(ch[0] - 12), type: 'sine', t, dur: dur * 8, vol: 0.16, attack: 0.02, dest: bus });
+      this.tone({ freq: midi(ch[0] - 12), type: 'sine', t, dur: pad * 0.8, vol: 0.09, attack: 2.6, dest: bus });
     }
-    if (s === 8) this.tone({ freq: midi(ch[0] - 12 + (bar % 2 ? 7 : 0)), type: 'sine', t, dur: dur * 6, vol: 0.12, attack: 0.02, dest: bus });
-    // 拨弦琶音
-    const pattern = [0, 2, 3, 4, 1, 3, 2, 4];
-    if (s % 2 === 0) {
-      const idx = pattern[(s / 2) % pattern.length];
-      const oct = s >= 8 && bar % 2 ? 24 : 12;
-      const n = ch[idx] + oct;
-      this.tone({ freq: midi(n), type: 'sine', t, dur: dur * 3.5, vol: 0.07 * (night > 0.5 ? 0.8 : 1), dest: bus });
-      this.tone({ freq: midi(n) * 2.001, type: 'sine', t, dur: dur * 1.5, vol: 0.012, dest: bus });
+    // 稀疏的风铃：很轻、带混响，夜里更少
+    if (s % (night > 0.6 ? 4 : 3) === 0) {
+      const n = ch[(step * 5) % ch.length] + 24;
+      this.tone({ freq: midi(n), type: 'sine', t: t + 0.05, dur: 3.8, vol: 0.032, attack: 0.35, dest: bus }).connect(this.reverb);
+      if (Math.random() < 0.3) {
+        this.tone({ freq: midi(n + 7), type: 'sine', t: t + 0.4, dur: 3.2, vol: 0.02, attack: 0.4, dest: bus }).connect(this.reverb);
+      }
     }
-    if (night > 0.6) return; // 夜晚只保留氛围
-    // 轻鼓
-    if (s === 0 || s === 10) {
-      this.tone({ freq: 120, glide: 42, t, dur: 0.22, vol: 0.3, dest: bus });
-    }
-    if (s === 4 || s === 12) this.snare(t, 0.07);
-    if (s % 2 === 0) this.hat(t, s % 4 === 2 ? 0.035 : 0.018);
-  }
-
-  snare(t, vol) {
-    const ctx = this.ctx;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.value = 1800;
-    f.Q.value = 0.8;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    src.connect(f).connect(g).connect(this.musicBus);
-    src.start(t, Math.random(), 0.2);
-  }
-
-  hat(t, vol) {
-    const ctx = this.ctx;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    const f = ctx.createBiquadFilter();
-    f.type = 'highpass';
-    f.frequency.value = 7000;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    src.connect(f).connect(g).connect(this.musicBus);
-    src.start(t, Math.random(), 0.06);
   }
 }

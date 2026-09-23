@@ -4,10 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>鹈鹕骑单车 · Pelican on a Bike</title>
-<meta name="description" content="一只戴着头盔和围巾的白鹈鹕，骑着复古自行车沿海岸线追鱼。实时 3D：程序化建模、IK 骨骼、布料围巾、Gerstner 海浪、昼夜循环与合成音乐。" />
+<meta name="description" content="一只戴着头盔和围巾的白鹈鹕，骑着复古自行车沿海岸线兜风。实时 3D：程序化建模、IK 骨骼、布料围巾、Gerstner 海浪、可选时段（清晨 / 白天 / 傍晚 / 晚上）与合成音乐，还能上传自己的 MP3 当背景乐。" />
 <meta property="og:title" content="鹈鹕骑单车 · Pelican on a Bike" />
-<meta property="og:description" content="实时 3D 海岸骑行：鹈鹕、单车、海浪、落日与一篮子鱼。" />
-<!--OG_IMAGE-->
+<meta property="og:description" content="实时 3D 海岸骑行：鹈鹕、单车、海浪与落日，时段自选、背景音乐可以换成你自己的歌。" />
+<!--OG_IMAGE--><!--WALLPAPER_CONFIG-->
 <meta name="theme-color" content="#0d1424" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='16' cy='48' r='11' fill='none' stroke='%23138a8a' stroke-width='5'/%3E%3Ccircle cx='48' cy='48' r='11' fill='none' stroke='%23138a8a' stroke-width='5'/%3E%3Cellipse cx='26' cy='26' rx='13' ry='9' fill='%23f6f3ec'/%3E%3Ccircle cx='38' cy='12' r='6' fill='%23f6f3ec'/%3E%3Cpath d='M42 11 L62 17 L42 17 Z' fill='%23f5b857'/%3E%3C/svg%3E" />
 <style>
@@ -94,16 +94,15 @@ body.hide-ui .hud, body.hide-ui .hud * { opacity: 0 !important; visibility: hidd
 .stats b { font-variant-numeric: tabular-nums; font-size: 15px; text-align: right; }
 .score { position: absolute; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); padding: 12px 16px; min-width: 210px; }
 .score .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.fish { display: flex; align-items: center; gap: 8px; }
-.fish .ico { font-size: 26px; }
-#fishCount { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--accent); display: inline-block; }
-#fishCount.bump { animation: bump 0.45s ease; }
-@keyframes bump { 30% { transform: scale(1.35); color: #fff3c4; } }
+/* 时段手动切换 */
+.tod { display: flex; gap: 4px; }
+.tod button { border: 1px solid var(--stroke); background: rgba(255,255,255,0.06); color: var(--muted); cursor: pointer; padding: 6px 10px; border-radius: 9px; font-size: 12.5px; transition: all 0.15s; }
+.tod button:hover { color: #fff; background: rgba(255,255,255,0.14); }
+.tod button.on { color: #1a1206; background: linear-gradient(135deg, #ffd27a, #ffab5e); border-color: transparent; font-weight: 700; }
 .ach { font-size: 12px; color: var(--muted); text-align: right; }
 .ach b { color: var(--text); font-size: 14px; }
-.timebar { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
-.timebar input { flex: 1; accent-color: var(--accent); pointer-events: auto; cursor: pointer; }
-#clockVal { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 44px; }
+.timebar { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+#clockVal { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); margin-left: 6px; }
 .hints { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); padding: 8px 14px; font-size: 12px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 560px); }
 .hints span { white-space: nowrap; }
 #fps { position: absolute; top: 72px; right: 18px; font: 11px ui-monospace, Menlo, monospace; color: var(--muted); padding: 4px 8px; }
@@ -113,9 +112,6 @@ body.hide-ui .hud, body.hide-ui .hud * { opacity: 0 !important; visibility: hidd
 .toast .emo { font-size: 24px; }
 .toast b { display: block; font-size: 14px; }
 .toast small { color: var(--muted); font-size: 12px; }
-.pop { position: fixed; z-index: 25; pointer-events: none; font-weight: 900; font-size: 22px; color: #bff4ff; text-shadow: 0 2px 10px rgba(0, 180, 255, 0.8); transform: translate(-50%, -50%); animation: pop 1.1s ease-out forwards; }
-.pop.gold { color: #ffe08a; font-size: 26px; text-shadow: 0 2px 14px rgba(255, 160, 0, 0.9); }
-@keyframes pop { to { transform: translate(-50%, -160%); opacity: 0; } }
 #guiHost { position: fixed; top: 70px; right: 16px; z-index: 20; max-height: calc(100vh - 220px); overflow-y: auto; border-radius: 12px; }
 #guiHost .lil-gui.lil-root { --background-color: rgba(12, 16, 28, 0.78); --title-background-color: rgba(255, 181, 71, 0.16); --title-text-color: #ffe3b3; --widget-color: rgba(255,255,255,0.1); --hover-color: rgba(255,255,255,0.16); --focus-color: rgba(255,255,255,0.22); --number-color: #ffc27a; --string-color: #8ce8e2; --font-family: var(--font); --font-size: 12px; --input-font-size: 12px; --width: 270px; border-radius: 12px; overflow: hidden; backdrop-filter: blur(14px); border: 1px solid var(--stroke); }
 body:not(.started) #guiHost { display: none; }
@@ -150,6 +146,10 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
 .tbtn { pointer-events: auto; width: 60px; height: 60px; border-radius: 50%; border: 1px solid var(--stroke); background: var(--glass); backdrop-filter: blur(10px); font-size: 22px; display: grid; place-items: center; touch-action: none; }
 .tbtn.on, .tbtn:active { background: rgba(255, 181, 71, 0.4); }
 .tbtn.big { width: 72px; height: 72px; }
+/* ---------- 桌面壁纸模式（wallpaper.html，或 ?wp=1） ---------- */
+html.wp, html.wp body { background: #05070f; cursor: none; }
+html.wp #intro, html.wp .hud, html.wp #toasts, html.wp #guiHost, html.wp #help, html.wp #cut, html.wp #fps { display: none !important; }
+html.wp .bars::before, html.wp .bars::after { height: 0 !important; }
 #fallback { position: fixed; inset: 0; display: grid; place-items: center; z-index: 99; background: #0d1424; padding: 24px; text-align: center; }
 @media (max-width: 900px) {
   .cams { top: calc(max(14px, env(safe-area-inset-top)) + 58px); left: 16px; right: 16px; transform: none; overflow-x: auto; scrollbar-width: none; }
@@ -159,6 +159,8 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
   .gauge { width: 96px; height: 96px; }
   .gauge .val b { font-size: 28px; }
   .score { min-width: 0; padding: 10px 12px; }
+  .tod { flex-wrap: wrap; max-width: 168px; }
+  .tod button { padding: 5px 8px; font-size: 12px; }
   .stats { font-size: 11.5px; gap: 3px 10px; }
   .stats b { font-size: 13px; }
   .timebar { display: none; }
@@ -214,17 +216,17 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
       </g>
     </svg>
     <h1>鹈鹕骑单车</h1>
-    <p class="sub">一只戴头盔、围红围巾的白鹈鹕，骑着复古单车沿海岸线追鱼。<br />黄昏、星空、海浪与路灯 —— 全部实时生成，无一张外部贴图。</p>
+    <p class="sub">一只戴头盔、围红围巾的白鹈鹕，骑着复古单车沿海岸线兜风。<br />清晨、白天、傍晚、晚上随你挑 —— 全部实时生成，无一张外部贴图。</p>
     <div class="chips">
-      <span class="chip">程序化建模</span><span class="chip">双骨骼 IK 踩踏</span><span class="chip">Verlet 布料围巾</span><span class="chip">Gerstner 海浪</span><span class="chip">昼夜循环</span><span class="chip">合成音效 + 生成式音乐</span><span class="chip">抓鱼小游戏</span>
+      <span class="chip">程序化建模</span><span class="chip">双骨骼 IK 踩踏</span><span class="chip">Verlet 布料围巾</span><span class="chip">Gerstner 海浪</span><span class="chip">四档时段手动切换</span><span class="chip">合成音效 + 氛围音乐</span><span class="chip">海浪风声可调可关</span><span class="chip">可上传自己的 MP3</span>
     </div>
     <div class="cta">
       <button class="btn-primary" id="startBtn">开始骑行 ▶</button>
       <button class="btn-ghost" id="startMute">静音进入</button>
     </div>
     <div class="keys-hint">
-      <kbd>W</kbd><kbd>S</kbd> 加速 / 刹车　<kbd>A</kbd><kbd>D</kbd> 变道抓鱼　<kbd>空格</kbd> 跳跃　<kbd>T</kbd> 放手特技<br />
-      <kbd>B</kbd> 按铃　<kbd>H</kbd> 鹈鹕大叫　<kbd>C</kbd> 切换镜头　<kbd>N</kbd> 快进 3 小时　点击鹈鹕 / 车铃 / 海面都有惊喜
+      <kbd>W</kbd><kbd>S</kbd> 加速 / 刹车　<kbd>A</kbd><kbd>D</kbd> 变道　<kbd>空格</kbd> 跳跃　<kbd>T</kbd> 放手特技<br />
+      <kbd>B</kbd> 按铃　<kbd>H</kbd> 鹈鹕大叫　<kbd>C</kbd> 切换镜头　<kbd>N</kbd> 切换时段　<kbd>M</kbd> 音乐　点击鹈鹕 / 车铃 / 海面都有惊喜
     </div>
     <div class="intro-links">
       <a href="https://github.com/riba2534/claude-opus-5-5-demo" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub 开源仓库</a>
@@ -244,7 +246,9 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
   </div>
   <div class="tools panel">
     <button class="icon-btn" data-act="shot" title="截图 (K)">📸</button>
-    <button class="icon-btn" data-act="music" title="音乐 (M)">🎵</button>
+    <button class="icon-btn" data-act="music" title="音乐开关 (M)">🎵</button>
+    <button class="icon-btn" data-act="env" title="海浪 / 风声开关">🌊</button>
+    <button class="icon-btn" data-act="upload" title="上传背景音乐 (MP3)">🎧</button>
     <button class="icon-btn" data-act="share" title="复制分享链接">🔗</button>
     <button class="icon-btn" data-act="full" title="全屏 (F)">⛶</button>
     <button class="icon-btn" data-act="gui" title="参数面板">⚙️</button>
@@ -274,14 +278,17 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
   </div>
   <div class="score panel">
     <div class="row">
-      <div class="fish"><span class="ico">🐟</span><span id="fishCount">0</span></div>
-      <div class="ach">成就<br /><b id="achCount">0/14</b></div>
+      <div class="tod">
+        <button data-time="morning">清晨</button>
+        <button data-time="day">白天</button>
+        <button data-time="dusk">傍晚</button>
+        <button data-time="night">晚上</button>
+      </div>
+      <div class="ach">成就<br /><b id="achCount">0/10</b></div>
     </div>
     <div class="timebar">
-      <span id="sunIcon">🌅</span>
-      <input id="timeSlider" type="range" min="0" max="24" step="0.01" value="17.3" aria-label="时刻" />
-      <span id="clockVal">17:18</span>
-      <button class="icon-btn on" data-act="flow" title="时间流动" style="width:30px;height:30px;font-size:13px">⏯</button>
+      <span id="sunIcon">🌇</span>
+      <span>当前时段<span id="clockVal">17:24</span></span>
     </div>
   </div>
   <div class="touch">
@@ -302,14 +309,17 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
     <h3>操作说明</h3>
     <ul>
       <li><kbd>W</kbd>/<kbd>↑</kbd> 加速</li><li><kbd>S</kbd>/<kbd>↓</kbd> 刹车（滑行有棘轮声）</li>
-      <li><kbd>A</kbd>/<kbd>D</kbd> 左右变道抓鱼</li><li><kbd>空格</kbd> 跳跃</li>
+      <li><kbd>A</kbd>/<kbd>D</kbd> 左右变道</li><li><kbd>空格</kbd> 跳跃</li>
       <li><kbd>T</kbd> 放手展翅 + 抬前轮</li><li><kbd>B</kbd> 按车铃</li>
       <li><kbd>H</kbd> 鹈鹕大叫</li><li><kbd>C</kbd> 切换镜头</li>
-      <li><kbd>Q</kbd>/<kbd>E</kbd> 手动换挡</li><li><kbd>N</kbd> 时间快进 3 小时</li>
+      <li><kbd>Q</kbd>/<kbd>E</kbd> 手动换挡</li><li><kbd>N</kbd> 切换时段</li>
       <li><kbd>M</kbd> 音乐开关</li><li><kbd>K</kbd> 截图 · <kbd>F</kbd> 全屏</li>
       <li><kbd>U</kbd> 隐藏界面</li><li><kbd>P</kbd> 暂停</li>
     </ul>
-    <p>拖拽旋转视角、滚轮缩放。点击鹈鹕它会叫，点击车铃会响，点击远处海面会有鱼跃出。几秒不操作会自动驾驶去追鱼；金色的鱼值 5 分。背景音乐是实时合成的，节奏跟随踏频。</p>
+    <p>拖拽旋转视角、滚轮缩放。点击鹈鹕它会叫，点击车铃会响，点击远处海面会有鱼跃出。<br />
+      右下角可以手动选时段：清晨 / 白天 / 傍晚 / 晚上（参数面板里也能选，还可以微调具体时刻）。<br />
+      海浪与风声嫌吵的话：右上角 🌊 一键关掉，或在参数面板 → 声音 里拖「海浪 / 风声音量」细调，拖到 0 就是静音。<br />
+      背景音乐默认是实时合成的轻柔氛围乐；想换成自己的歌，点右上角 🎧 上传 MP3（可多选、循环播放），参数面板 → 声音 里也能开关和清除。</p>
     <button class="btn-ghost close" data-act="help">知道了</button>
   </div>
 </div>

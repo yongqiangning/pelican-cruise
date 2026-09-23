@@ -420,12 +420,10 @@ export function createPelican() {
   const st = {
     jaw: 0,
     jawTarget: 0,
-    bulge: 0,
     blink: 0,
     nextBlink: 1.5,
     blinkT: -1,
     honkT: -1,
-    gulpT: -1,
     yaw: 0,
     pitch: 0,
     spread: 0,
@@ -473,9 +471,6 @@ export function createPelican() {
 
   function honk() {
     st.honkT = 0;
-  }
-  function gulp() {
-    st.gulpT = 0;
   }
 
   function update(dt, ctx) {
@@ -556,14 +551,7 @@ export function createPelican() {
       honkK = Math.sin(Math.min(1, st.honkT / 0.9) * Math.PI);
       if (st.honkT > 0.9) st.honkT = -1;
     }
-    let gulpK = 0;
-    if (st.gulpT >= 0) {
-      st.gulpT += dt;
-      gulpK = st.gulpT < 0.18 ? st.gulpT / 0.18 : Math.max(0, 1 - (st.gulpT - 0.18) / 0.25);
-      if (st.gulpT < 0.3) st.bulge = Math.max(st.bulge, st.gulpT / 0.3);
-      if (st.gulpT > 1.2) st.gulpT = -1;
-    }
-    pitchT += honkK * 0.55 + gulpK * 0.35 + trick * 0.15;
+    pitchT += honkK * 0.55 + trick * 0.15;
     st.yaw = damp(st.yaw, yawT, 5, dt);
     st.pitch = damp(st.pitch, pitchT, 6, dt);
     V.headPos.x -= honkK * 0.02;
@@ -572,12 +560,12 @@ export function createPelican() {
     head.rotation.set(Math.sin(t * 1.3) * 0.03, st.yaw, st.pitch, 'YZX');
     head.updateMatrix();
 
-    st.jawTarget = Math.max(honkK * 0.55, gulpK * 0.7, ctx.mouthOpen || 0);
+    st.jawTarget = Math.max(honkK * 0.55, ctx.mouthOpen || 0);
     st.jaw = damp(st.jaw, st.jawTarget, 20, dt);
     jaw.rotation.z = -st.jaw;
     upperPivot.rotation.z = st.jaw * 0.12;
-    st.bulge = Math.max(0, st.bulge - dt * 0.45);
-    pouch.morphTargetInfluences[0] = clamp(st.bulge + Math.sin(t * 20) * 0.08 * st.bulge + honkK * 0.25, 0, 1.3);
+    // 喉囊只在大叫时鼓一下
+    pouch.morphTargetInfluences[0] = clamp(honkK * 0.25, 0, 1.3);
 
     // 眨眼
     st.nextBlink -= dt;
@@ -619,7 +607,6 @@ export function createPelican() {
     hitMeshes,
     update,
     honk,
-    gulp,
     materials: M,
     state: st,
   };

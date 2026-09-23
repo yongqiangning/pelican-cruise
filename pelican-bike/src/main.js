@@ -15,12 +15,21 @@ import { fishGeometry } from './fish.js';
 import { Particles, Confetti, SpeedLines, Scarf } from './effects.js';
 import { AudioEngine } from './audio.js';
 import { clamp, lerp, damp, smoothstep, TAU, mulberry32 } from './util.js';
-import { makeSpriteTexture } from './textures.js';
 
 const Q = new URLSearchParams(location.search);
 const qp = (k, d) => (Q.has(k) ? Q.get(k) : d);
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const $ = (s) => document.querySelector(s);
+
+// ---------------- 桌面壁纸模式 ----------------
+// wallpaper.html 会在 head 里注入 window.__PELICAN_WP（一行可改的默认配置），并提前给 <html> 加 .wp，
+// 避免首帧闪出界面。这里兼容 URL 参数：?wp=1&tod=night&q=medium&maxfps=24
+const WPC = window.__PELICAN_WP || {};
+const WP = qp('wp', WPC.enabled ? '1' : '0') === '1';
+if (WP) document.documentElement.classList.add('wp');
+// >0 表示锁帧（壁纸模式默认 30，省电、也不至于看着卡）
+const WP_FPS = WP ? +qp('maxfps', WPC.fps || 30) : 0;
+const WP_GAP = WP_FPS > 0 ? 1000 / WP_FPS : 0;
 
 // ---------------- 画质 ----------------
 const DPR = window.devicePixelRatio || 1;
@@ -30,7 +39,7 @@ const QUALITY = {
   high: { name: '精美', pr: Math.min(DPR, 1.75), shadow: 2048, bloom: true, msaa: 4, density: 1 },
   ultra: { name: '极致', pr: Math.min(DPR, 2.25), shadow: 4096, bloom: true, msaa: 4, density: 1.25 },
 };
-let qualityKey = qp('q', isTouch ? 'medium' : 'high');
+let qualityKey = qp('q', WPC.q || (isTouch ? 'medium' : 'high'));
 if (!QUALITY[qualityKey]) qualityKey = 'high';
 let quality = QUALITY[qualityKey];
 
@@ -113,7 +122,6 @@ content.add(bike.group, pelican.root);
 scene.add(rider);
 
 // ---------------- 特效 ----------------
-const sprite = makeSpriteTexture();
 const dust = new Particles(scene, 420, { additive: false, opacity: 0.35 });
 const sparkles = new Particles(scene, 360, { additive: true });
 const splash = new Particles(scene, 360, { additive: false });
@@ -121,22 +129,9 @@ const confetti = new Confetti(scene);
 const speedLines = new SpeedLines(camera);
 const scarf = new Scarf(scene);
 
-// 可收集的鱼
+// 海里的鱼：只做环境点缀（跃出海面），不参与任何玩法
 const fishGeo = fishGeometry();
 const fishMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.6, roughness: 0.25, emissive: new THREE.Color('#1f6b8f'), emissiveIntensity: 0.45, side: THREE.DoubleSide });
-const goldMat = new THREE.MeshStandardMaterial({ color: '#ffcf3f', metalness: 1, roughness: 0.18, emissive: new THREE.Color('#ff9500'), emissiveIntensity: 0.9, side: THREE.DoubleSide });
-const fishes = [];
-for (let i = 0; i < 12; i++) {
-  const m = new THREE.Mesh(fishGeo, fishMat);
-  m.scale.setScalar(1.35);
-  m.castShadow = true;
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: sprite, color: '#7fe3ff', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
-  halo.scale.setScalar(0.9);
-  m.add(halo);
-  m.visible = false;
-  scene.add(m);
-  fishes.push({ mesh: m, halo, active: false, x: 0, y: 0, z: 0, golden: false, phase: 0, caught: -1 });
-}
 // 跃出海面的鱼
 const jumpers = [];
 for (let i = 0; i < 5; i++) {
@@ -223,14 +218,30 @@ function buildComposer() {
   composer.addPass(new OutputPass());
 }
 
+// ---------------- 时段预设 ----------------
+// 太阳高度角决定整体光照（sky.js 的 samplePalette 按高度角插值），所以时段直接用具体时刻表示
+const TIME_PRESETS = {
+  morning: { hour: 6.5, label: '清晨', icon: '🌅' },
+  day: { hour: 12.2, label: '白天', icon: '☀️' },
+  dusk: { hour: 17.4, label: '傍晚', icon: '🌇' },
+  night: { hour: 22, label: '晚上', icon: '🌙' },
+};
+const TIME_ORDER = ['morning', 'day', 'dusk', 'night'];
+let timeOfDay = qp('tod', WPC.tod || 'dusk');
+if (!TIME_PRESETS[timeOfDay]) timeOfDay = 'dusk';
+
 // ---------------- 设置 / 状态 ----------------
 const settings = {
   cruise: +qp('speed', 7.5),
+  // 定速（公里/小时）与目标踏频（rpm），两者只能生效一个：kph 优先，都设 0 = 游戏默认行为
+  kph: +qp('kph', WPC.kph ?? 0),
+  cadence: +qp('cadence', WPC.cadence ?? 0),
   autopilot: true,
   autoGear: true,
-  hour: +qp('time', 17.35),
-  dayRate: +qp('dayrate', 0.025),
-  timeFlow: qp('freeze', '0') !== '1',
+  timeOfDay,
+  hour: Q.has('time') ? +qp('time', TIME_PRESETS[timeOfDay].hour) : TIME_PRESETS[timeOfDay].hour,
+  dayRate: +qp('dayrate', WPC.dayrate ?? 0.025),
+  timeFlow: qp('flow', WPC.flow ? '1' : '0') === '1',
   bloom: true,
   bloomBoost: 1,
   exposure: 1,
@@ -240,14 +251,48 @@ const settings = {
   helmet: true,
   glasses: qp('glasses', 'auto'),
   scarf: true,
-  lookMouse: true,
+  lookMouse: !WP,
   volume: 0.8,
+  envVolume: +qp('env', 0.5),
+  envOn: qp('envon', '1') === '1',
   music: true,
   musicVolume: 0.55,
+  musicCustom: false,
+  trackName: '未选择（用内置生成式音乐）',
   quality: qualityKey,
   showFps: qp('fps', '0') === '1',
 };
 buildComposer();
+
+// 手动切换时段：直接把时刻拨到预设值（默认不再自动昼夜循环）
+let todShown = null;
+function syncTimeButtons(key) {
+  if (key === todShown) return;
+  todShown = key;
+  document.querySelectorAll('[data-time]').forEach((b) => b.classList.toggle('on', b.dataset.time === key));
+}
+// 时刻被微调或者开自动流动后，高亮会跟着回到最接近的时段
+function refreshTimeHighlight() {
+  let key = null;
+  for (const k of TIME_ORDER) {
+    if (Math.abs(TIME_PRESETS[k].hour - settings.hour) < 0.7) key = k;
+  }
+  syncTimeButtons(key);
+}
+function setTimeOfDay(key) {
+  const p = TIME_PRESETS[key];
+  if (!p) return;
+  settings.timeOfDay = key;
+  settings.hour = p.hour;
+  syncTimeButtons(key);
+}
+function cycleTimeOfDay() {
+  const i = TIME_ORDER.indexOf(settings.timeOfDay);
+  setTimeOfDay(TIME_ORDER[(i + 1) % TIME_ORDER.length]);
+  const p = TIME_PRESETS[settings.timeOfDay];
+  toast(p.icon, `时段：${p.label}`, '参数面板里也能手动切换');
+}
+syncTimeButtons(settings.timeOfDay);
 
 const S = {
   speed: settings.cruise * 0.6,
@@ -271,8 +316,6 @@ const S = {
   accel: 0,
   pedaling: true,
   cadence: 0,
-  fish: 0,
-  golden: 0,
   jumps: 0,
   tricks: 0,
   bells: 0,
@@ -280,12 +323,44 @@ const S = {
   lastSteer: -99,
   lastGearManual: -99,
   lastPointer: -99,
-  nextFishAt: 30,
   started: false,
   paused: false,
   t: 0,
   time: 0,
 };
+
+// ---------------- 定速 / 固定踏频 ----------------
+// 车速、踏频、齿比三者是绑死的：踏频 = 车速 / 轮周长 × 齿比，其中只有车速能自由设定。
+// 所以「定速」和「定踏频」只能二选一，车速优先：
+//   1) kph > 0（公里/小时）→ 车速定死，档位挑「踏频最接近 86」的那一档（和游戏里的自动变速同目标）
+//   2) 否则 cadence > 0    → 踏频定死，车速反推，档位挑「换算车速最接近原巡航速度」的那一档
+const WHEEL_CIRC = WHEEL_R * TAU;
+const cadenceAt = (i, v) => (v / WHEEL_CIRC / (GEARS[i][0] / GEARS[i][1])) * 60;
+if (settings.kph > 0) {
+  settings.cruise = settings.kph / 3.6;
+  let pick = 0;
+  GEARS.forEach((_, i) => {
+    if (Math.abs(cadenceAt(i, settings.cruise) - 86) < Math.abs(cadenceAt(pick, settings.cruise) - 86)) pick = i;
+  });
+  S.gear = pick;
+  settings.autoGear = false;
+} else if (settings.cadence > 0) {
+  const speedFor = (i) => (settings.cadence / 60) * WHEEL_CIRC * (GEARS[i][0] / GEARS[i][1]);
+  let pick = 0;
+  // 选换算出的车速最接近原本巡航速度的那一档，观感速度不至于突变
+  GEARS.forEach((_, i) => {
+    if (Math.abs(speedFor(i) - settings.cruise) < Math.abs(speedFor(pick) - settings.cruise)) pick = i;
+  });
+  S.gear = pick;
+  settings.cruise = speedFor(pick);
+  settings.autoGear = false;
+}
+// 壁纸不做起步加速：直接从稳定巡航速度开始，否则刚进入时那一两秒的加速会带着鹈鹕前后晃
+if (WP) {
+  S.speed = settings.cruise;
+  S.accel = 0;
+}
+
 const keys = {};
 const achieved = new Set();
 
@@ -301,6 +376,8 @@ controls.maxDistance = 28;
 controls.maxPolarAngle = Math.PI * 0.495;
 controls.enablePan = false;
 controls.autoRotateSpeed = 0.55;
+// 壁纸模式下鼠标不属于这个窗口，直接关掉轨道控制，免得桌面上的点击被吃掉
+if (WP) controls.enabled = false;
 controls.addEventListener('start', () => {
   S.lastOrbitInput = S.time;
   controls.autoRotate = false;
@@ -314,7 +391,7 @@ const CAMS = [
   { id: 'cine', label: '电影运镜' },
   { id: 'pov', label: '鹈鹕视角' },
 ];
-let camMode = qp('cam', 'cine');
+let camMode = qp('cam', WPC.cam || 'cine');
 if (!CAMS.find((c) => c.id === camMode)) camMode = 'orbit';
 const blend = { t: 1, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: 42 };
 const camTmp = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 42 };
@@ -451,6 +528,8 @@ const SHORE_GUARD = -13;
 
 let flashTimer = 0;
 function flashCut() {
+  // 壁纸是长时间挂着的画面，每几秒闪一次黑屏太晃眼，这里直接硬切
+  if (WP) return;
   const el = $('#cut');
   if (!el) return;
   el.classList.remove('go');
@@ -536,7 +615,6 @@ function updateLighting(dt) {
 // ---------------- 骑行物理 ----------------
 const tmpV = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
-const mouthW = new THREE.Vector3();
 const gripL = new THREE.Vector3();
 const gripR = new THREE.Vector3();
 const lookTarget = new THREE.Vector3();
@@ -589,9 +667,9 @@ function updateRide(dt) {
     S.lastSteer = S.time;
     S.laneTarget = clamp(S.laneTarget + steerIn * 2.4 * dt, -2.15, 2.15);
   } else if (settings.autopilot && S.time - S.lastSteer > 4) {
-    const next = nextFish(40);
-    const want = next ? next.z : 0.9 + Math.sin(S.time * 0.23) * 0.7;
-    S.laneTarget = damp(S.laneTarget, want, next ? 2.2 : 0.8, dt);
+    // 自动巡航：在车道内缓慢游走，看起来像在找乐子
+    const want = 0.9 + Math.sin(S.time * 0.23) * 0.85 + Math.sin(S.time * 0.067) * 0.5;
+    S.laneTarget = damp(S.laneTarget, clamp(want, -2.15, 2.15), 0.8, dt);
   }
   const k = 10;
   S.laneV += ((S.laneTarget - S.lane) * k - S.laneV * 2 * Math.sqrt(k)) * dt;
@@ -661,84 +739,7 @@ function honk() {
   unlock('honk');
 }
 
-// ---------------- 收集鱼 ----------------
-const LANES = [-1.8, -0.6, 0.6, 1.8];
-function nextFish(range) {
-  let best = null;
-  for (const f of fishes) {
-    if (!f.active || f.caught >= 0) continue;
-    const rel = f.x - S.distance;
-    if (rel > 0.2 && rel < range && (!best || rel < best.x - S.distance)) best = f;
-  }
-  return best;
-}
-function spawnFish(ahead = 85) {
-  const f = fishes.find((x) => !x.active);
-  if (!f) return;
-  f.active = true;
-  f.caught = -1;
-  f.x = S.distance + ahead;
-  f.z = LANES[Math.floor(rnd() * LANES.length)];
-  f.y = 1.3 + rnd() * 0.25;
-  f.golden = rnd() < 0.12;
-  f.phase = rnd() * TAU;
-  f.mesh.material = f.golden ? goldMat : fishMat;
-  f.halo.material.color.set(f.golden ? '#ffd257' : '#7fe3ff');
-  f.mesh.visible = true;
-  f.mesh.scale.setScalar(1.35);
-}
-const gold = new THREE.Color('#ffd257');
-const cyan = new THREE.Color('#9fefff');
 const white = new THREE.Color('#ffffff');
-function updateFishes(dt) {
-  if (S.distance > S.nextFishAt) {
-    spawnFish(S.nextFishAt === 30 ? 32 : 85);
-    S.nextFishAt = S.distance + 16 + rnd() * 18;
-  }
-  pelican.mouth.getWorldPosition(mouthW);
-  for (const f of fishes) {
-    if (!f.active) continue;
-    const rel = f.x - S.distance;
-    if (f.caught >= 0) {
-      f.caught += dt;
-      const u = Math.min(1, f.caught / 0.16);
-      f.mesh.position.lerp(mouthW, u);
-      f.mesh.scale.setScalar(1.35 * (1 - u * 0.9));
-      if (u >= 1) {
-        f.active = false;
-        f.mesh.visible = false;
-      }
-      continue;
-    }
-    f.mesh.position.set(rel, f.y + Math.sin(S.t * 3 + f.phase) * 0.08, f.z);
-    f.mesh.rotation.set(Math.sin(S.t * 9 + f.phase) * 0.15, Math.PI + Math.sin(S.t * 1.5 + f.phase) * 0.6, 0);
-    f.halo.material.opacity = 0.45 + Math.sin(S.t * 5 + f.phase) * 0.15;
-    if (rel < -12) {
-      f.active = false;
-      f.mesh.visible = false;
-      continue;
-    }
-    const dx = f.mesh.position.x - mouthW.x;
-    const dz = f.mesh.position.z - mouthW.z;
-    const dy = f.mesh.position.y - mouthW.y;
-    if (Math.abs(dx) < 0.45 + S.speed * dt && Math.abs(dz) < 0.52 && Math.abs(dy) < 0.6) {
-      f.caught = 0;
-      S.fish += f.golden ? 5 : 1;
-      if (f.golden) S.golden++;
-      pelican.gulp();
-      audio.gulp(f.golden);
-      for (let i = 0; i < (f.golden ? 70 : 36); i++) {
-        tmpV2.set(rnd() - 0.5, rnd() * 0.9 - 0.2, rnd() - 0.5).normalize().multiplyScalar(0.8 + rnd() * 1.6);
-        sparkles.emit(mouthW, tmpV2, rnd() < 0.5 ? (f.golden ? gold : cyan) : white, 0.035 + rnd() * 0.03, 0.6 + rnd() * 0.6, { drag: 3 });
-      }
-      popScore(f.golden ? '+5 金鱼!' : '+1', f.golden);
-      unlock('fish1');
-      if (f.golden) unlock('golden');
-      if (S.fish >= 10) unlock('fish10');
-      if (S.fish >= 50) unlock('fish50');
-    }
-  }
-}
 
 // 跃出海面的鱼（点击海面或随机）
 function launchJumper(x, z) {
@@ -808,10 +809,7 @@ function emitDust(dt) {
 let glanceT = 0;
 let glanceKind = 0;
 function computeLook(dt) {
-  const next = nextFish(28);
-  if (next) {
-    lookTarget.copy(next.mesh.position);
-  } else if (settings.lookMouse && S.time - S.lastPointer < 2.5 && camMode !== 'pov') {
+  if (settings.lookMouse && S.time - S.lastPointer < 2.5 && camMode !== 'pov') {
     raycaster.setFromCamera(pointer, camera);
     const d = camera.position.distanceTo(focus);
     lookTarget.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, d);
@@ -830,10 +828,6 @@ function computeLook(dt) {
 
 // ---------------- 成就 / 提示 ----------------
 const ACH = {
-  fish1: ['🐟', '第一条鱼', '张嘴就是干饭'],
-  golden: ['🌟', '金色传说', '吞下了一条金鱼 (+5)'],
-  fish10: ['🎣', '十鱼到手', '喉囊开始沉甸甸了'],
-  fish50: ['🏆', '海岸渔王', '累计 50 条鱼'],
   jump: ['🦘', '起飞！', '第一次跳跃'],
   trick: ['🪽', '放手特技', '展翅 + 抬前轮'],
   trick3: ['🎪', '杂技鹈鹕', '完成 3 次特技'],
@@ -851,7 +845,7 @@ function unlock(id) {
   const [emo, title, sub] = ACH[id];
   toast(emo, title, sub);
   $('#achCount').textContent = `${achieved.size}/${Object.keys(ACH).length}`;
-  if (['golden', 'fish10', 'speed45', 'km1', 'trick3', 'fish50', 'km5'].includes(id)) confetti.burst(tmpV.set(0.3, 1.9, S.lane));
+  if (['speed45', 'km1', 'trick3', 'km5'].includes(id)) confetti.burst(tmpV.set(0.3, 1.9, S.lane));
 }
 function toast(emo, title, sub) {
   const box = $('#toasts');
@@ -865,21 +859,6 @@ function toast(emo, title, sub) {
     setTimeout(() => el.remove(), 500);
   }, 3200);
 }
-function popScore(text, golden) {
-  const el = $('#fishCount');
-  el.classList.remove('bump');
-  void el.offsetWidth;
-  el.classList.add('bump');
-  const p = document.createElement('div');
-  p.className = 'pop' + (golden ? ' gold' : '');
-  p.textContent = text;
-  // 定位到鹈鹕嘴部的屏幕坐标
-  tmpV.copy(mouthW).project(camera);
-  p.style.left = `${(tmpV.x * 0.5 + 0.5) * innerWidth}px`;
-  p.style.top = `${(-tmpV.y * 0.5 + 0.5) * innerHeight}px`;
-  document.body.appendChild(p);
-  setTimeout(() => p.remove(), 1100);
-}
 
 // ---------------- HUD ----------------
 const hud = {
@@ -889,9 +868,7 @@ const hud = {
   gear: $('#gearVal'),
   dist: $('#distVal'),
   clock: $('#clockVal'),
-  fish: $('#fishCount'),
   fps: $('#fps'),
-  timeSlider: $('#timeSlider'),
   sunIcon: $('#sunIcon'),
 };
 const ARC_LEN = 2 * Math.PI * 52 * 0.75;
@@ -917,6 +894,7 @@ function updateHud(dt, info) {
   hudAcc += dt;
   if (hudAcc < 0.1) return;
   hudAcc = 0;
+  if (WP) return; // 壁纸模式界面全隐藏，不用每 0.1 秒写一遍这些 DOM
   const kmh = S.speed * 3.6;
   hud.speed.textContent = kmh.toFixed(0);
   hud.arc.style.strokeDashoffset = `${ARC_LEN * (1 - clamp(kmh / 55, 0, 1))}`;
@@ -926,8 +904,7 @@ function updateHud(dt, info) {
   const h = Math.floor(settings.hour);
   const m = Math.floor((settings.hour - h) * 60);
   hud.clock.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  hud.fish.textContent = S.fish;
-  if (document.activeElement !== hud.timeSlider) hud.timeSlider.value = settings.hour;
+  refreshTimeHighlight();
   hud.sunIcon.textContent = info.night > 0.5 ? '🌙' : info.elev < 8 ? '🌅' : '☀️';
   hud.fps.textContent = `${fpsVal.toFixed(0)} FPS · ${quality.name} · ${renderer.getPixelRatio().toFixed(2)}x`;
   hud.fps.hidden = !settings.showFps;
@@ -992,6 +969,7 @@ const KEYMAP = {
   ArrowRight: 'right',
 };
 addEventListener('keydown', (e) => {
+  if (WP) return; // 壁纸模式不接键盘
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLAnchorElement) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = KEYMAP[e.code];
@@ -1020,7 +998,7 @@ addEventListener('keydown', (e) => {
       break;
     }
     case 'KeyN':
-      settings.hour = (settings.hour + 3) % 24;
+      cycleTimeOfDay();
       break;
     case 'KeyQ':
       S.gear = Math.max(0, S.gear - 1);
@@ -1063,17 +1041,20 @@ addEventListener('blur', () => {
 
 const down = { x: 0, y: 0, t: 0 };
 renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (WP) return;
   down.x = e.clientX;
   down.y = e.clientY;
   down.t = performance.now();
 });
 renderer.domElement.addEventListener('pointermove', (e) => {
+  if (WP) return;
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   S.lastPointer = S.time;
   // 在其它镜头下拖拽，自动切到自由环绕
   if (e.buttons && camMode !== 'orbit' && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) setCamMode('orbit');
 });
 renderer.domElement.addEventListener('pointerup', (e) => {
+  if (WP) return;
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || performance.now() - down.t > 450) return;
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
@@ -1114,15 +1095,13 @@ const ACTIONS = {
   honk,
   shot: () => (wantShot = true),
   music: () => toggleMusic(),
+  env: () => toggleEnv(),
   full: () => toggleFullscreen(),
   gui: () => toggleGui(),
   help: () => $('#help').classList.toggle('show'),
   share: () => shareView(),
-  night: () => (settings.hour = (settings.hour + 3) % 24),
-  flow: () => {
-    settings.timeFlow = !settings.timeFlow;
-    $('[data-act="flow"]').classList.toggle('on', settings.timeFlow);
-  },
+  time: () => cycleTimeOfDay(),
+  upload: () => openMusicPicker(),
 };
 document.querySelectorAll('[data-act]').forEach((b) => {
   b.addEventListener('click', (e) => {
@@ -1131,15 +1110,14 @@ document.querySelectorAll('[data-act]').forEach((b) => {
   });
 });
 document.querySelectorAll('[data-cam]').forEach((b) => b.addEventListener('click', () => setCamMode(b.dataset.cam)));
-hud.timeSlider.addEventListener('input', () => {
-  settings.hour = +hud.timeSlider.value;
-});
-hud.timeSlider.addEventListener('change', () => hud.timeSlider.blur());
+document.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('click', () => setTimeOfDay(b.dataset.time)));
 
 function ensureAudio() {
   if (!audio.ctx) {
     audio.start();
     audio.setVolume(settings.volume);
+    audio.setEnvVolume(settings.envVolume);
+    audio.setEnv(settings.envOn);
     audio.setMusic(settings.music);
     audio.setMusicVolume(settings.musicVolume);
   }
@@ -1148,18 +1126,71 @@ addEventListener('pointerdown', () => {
   const st = audio.ctx?.state;
   if (st && st !== 'running' && st !== 'closed' && !document.hidden && !S.paused) audio.ctx.resume();
 });
+function setMusicButton() {
+  $('[data-act="music"]')?.classList.toggle('off', !settings.music);
+}
 function toggleMusic() {
   settings.music = !settings.music;
   // 静音进入后再打开音乐：此时有用户手势，可以启动音频
-  if (settings.music && !audio.ctx) {
-    audio.start();
-    audio.setVolume(settings.volume);
-  }
+  if (settings.music) ensureAudio();
   audio.setMusic(settings.music);
   audio.setMusicVolume(settings.musicVolume);
-  $('[data-act="music"]').classList.toggle('off', !settings.music);
+  setMusicButton();
 }
 document.addEventListener('visibilitychange', () => audio.mute(document.hidden || S.paused));
+
+// 海浪 / 风声：HUD 上一个开关，参数面板里还能细调音量
+function setEnvButton() {
+  $('[data-act="env"]')?.classList.toggle('off', !settings.envOn);
+}
+function toggleEnv() {
+  settings.envOn = !settings.envOn;
+  if (settings.envOn) ensureAudio(); // 这里一定处于用户手势里，可以启动音频
+  audio.setEnv(settings.envOn);
+  setEnvButton();
+  toast(settings.envOn ? '🌊' : '🔇', settings.envOn ? '海浪与风声：开' : '海浪与风声：关', '音量可在参数面板 → 声音 里调');
+}
+setEnvButton();
+
+// ---------------- 自定义背景音乐（用户上传 MP3） ----------------
+const musicInput = document.createElement('input');
+musicInput.type = 'file';
+musicInput.accept = 'audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac';
+musicInput.multiple = true;
+musicInput.style.display = 'none';
+document.body.appendChild(musicInput);
+musicInput.addEventListener('change', () => {
+  const files = [...musicInput.files];
+  musicInput.value = '';
+  if (!files.length) return;
+  ensureAudio(); // 静音进入也能用：这里一定处于用户手势里
+  if (!audio.loadCustomMusic(files)) {
+    toast('🎧', '这个文件读不了', '换一个 MP3 / M4A / WAV 试试');
+    return;
+  }
+  settings.musicCustom = true;
+  settings.music = true;
+  settings.trackName = audio.trackName || files[0].name;
+  audio.setVolume(settings.volume);
+  audio.setMusicVolume(settings.musicVolume);
+  audio.setMusic(true);
+  setMusicButton();
+  toast('🎧', '已经换成你的音乐', `${files.length} 首，循环播放`);
+});
+function openMusicPicker() {
+  ensureAudio();
+  musicInput.click();
+}
+function useCustomMusic(on) {
+  ensureAudio();
+  audio.setCustomOn(on);
+  settings.musicCustom = on;
+}
+function clearCustomMusic() {
+  audio.clearCustomMusic();
+  settings.musicCustom = false;
+  settings.trackName = '未选择（用内置生成式音乐）';
+}
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
   else document.exitFullscreen?.();
@@ -1168,7 +1199,12 @@ function shareView() {
   const u = new URL(location.href);
   u.search = '';
   u.searchParams.set('time', settings.hour.toFixed(2));
+  u.searchParams.set('tod', settings.timeOfDay);
   u.searchParams.set('cam', camMode);
+  if (!settings.envOn || Math.abs(settings.envVolume - 0.5) > 0.001) {
+    u.searchParams.set('env', settings.envVolume.toFixed(2));
+    u.searchParams.set('envon', settings.envOn ? '1' : '0');
+  }
   navigator.clipboard?.writeText(u.toString()).then(
     () => toast('🔗', '已复制分享链接', '打开即回到当前时刻与镜头'),
     () => toast('🔗', '分享链接', u.toString()),
@@ -1194,11 +1230,15 @@ const gui = new GUI({ title: '⚙️ 参数面板', container: $('#guiHost') });
 gui.hide();
 const f1 = gui.addFolder('骑行');
 f1.add(settings, 'cruise', 0, 14, 0.5).name('巡航速度 m/s');
-f1.add(settings, 'autopilot').name('自动驾驶（追鱼）');
+f1.add(settings, 'autopilot').name('自动巡航（自动变道）');
 f1.add(settings, 'autoGear').name('自动变速');
 const f2 = gui.addFolder('时间与天气');
-f2.add(settings, 'hour', 0, 24, 0.01).name('时刻').listen();
-f2.add(settings, 'timeFlow').name('时间流动').listen();
+f2.add(settings, 'timeOfDay', { 清晨: 'morning', 白天: 'day', 傍晚: 'dusk', 晚上: 'night' })
+  .name('时段（手动）')
+  .listen()
+  .onChange(setTimeOfDay);
+f2.add(settings, 'hour', 0, 24, 0.01).name('时刻微调').listen().onChange(refreshTimeHighlight);
+f2.add(settings, 'timeFlow').name('时间自动流动').listen();
 f2.add(settings, 'dayRate', 0, 0.5, 0.005).name('流速 (时/秒)');
 f2.add(settings, 'cloud', 0, 0.9, 0.01).name('云量');
 f2.add(settings, 'waveAmp', 0, 2.2, 0.05).name('浪高');
@@ -1219,15 +1259,28 @@ f5.add(settings, 'volume', 0, 1, 0.01).name('主音量').onChange((v) => {
   ensureAudio();
   audio.setVolume(v);
 });
-f5.add(settings, 'music').name('生成式音乐').listen().onChange((v) => {
+// 海浪 / 风声背景音：可以单独调小，也可以整块关掉
+f5.add(settings, 'envVolume', 0, 1, 0.01).name('海浪 / 风声音量').onChange((v) => {
+  ensureAudio();
+  audio.setEnvVolume(v);
+});
+f5.add(settings, 'envOn').name('海浪与风声').listen().onChange((v) => {
+  ensureAudio();
+  audio.setEnv(v);
+});
+f5.add(settings, 'music').name('音乐开关').listen().onChange((v) => {
   ensureAudio();
   audio.setMusic(v);
-  $('[data-act="music"]').classList.toggle('off', !v);
+  setMusicButton();
 });
 f5.add(settings, 'musicVolume', 0, 1, 0.01).name('音乐音量').onChange((v) => {
   ensureAudio();
   audio.setMusicVolume(v);
 });
+f5.add(settings, 'musicCustom').name('使用自定义音乐').listen().onChange((v) => useCustomMusic(v));
+f5.add({ pick: openMusicPicker }, 'pick').name('上传背景音乐（MP3）');
+f5.add({ clear: clearCustomMusic }, 'clear').name('清除自定义音乐');
+f5.add(settings, 'trackName').name('当前曲目').listen().disable();
 for (const f of [f2, f3, f4, f5]) f.close();
 function toggleGui() {
   if (gui._hidden) {
@@ -1247,8 +1300,8 @@ function start(withSound) {
     audio.setVolume(settings.volume);
     audio.setMusicVolume(settings.musicVolume);
   }
-  setCamMode(Q.has('cam') ? camMode : 'orbit');
-  setTimeout(() => toast('🐦', '出发！', isTouch ? '点屏幕按钮加速、变道、跳跃' : 'W/S 加减速 · A/D 变道 · 空格跳 · T 特技'), 900);
+  setCamMode(Q.has('cam') ? camMode : WP ? WPC.cam || 'cine' : 'orbit'); // 壁纸默认电影运镜
+  if (!WP) setTimeout(() => toast('🐦', '出发！', isTouch ? '点屏幕按钮加速、变道、跳跃' : 'W/S 加减速 · A/D 变道 · 空格跳 · T 特技'), 900);
 }
 $('#startBtn').addEventListener('click', () => start(true));
 $('#startMute').addEventListener('click', () => {
@@ -1256,7 +1309,8 @@ $('#startMute').addEventListener('click', () => {
   $('[data-act="music"]').classList.add('off');
   start(false);
 });
-if (qp('autostart', '0') === '1') start(false);
+// 壁纸模式：不要开场遮罩、不要声音，直接开始骑
+if (WP || qp('autostart', '0') === '1') start(false);
 setCamMode(camMode, true);
 
 // ---------------- 主循环 ----------------
@@ -1271,11 +1325,10 @@ let info = { elev: 10, night: 0 };
 const fixedDt = qp('dt', '');
 const bufSize = new THREE.Vector2();
 
-function frame(ts) {
-  timer.update(ts);
-  let dt = Math.min(timer.getDelta(), 1 / 20);
-  if (fixedDt) dt = +fixedDt;
-  if (S.paused) dt = 0;
+let wpLastDraw = -1e9;
+
+// 一帧的模拟推进（不含渲染与 HUD）：主循环和「壁纸首帧前预热」共用同一套
+function step(dt) {
   S.t += dt;
   S.time += dt;
 
@@ -1317,7 +1370,6 @@ function frame(ts) {
   }
   pelican.knot.visible = settings.scarf;
 
-  updateFishes(dt);
   updateJumpers(dt);
   emitDust(dt);
   if (S.started && rnd() < dt * 0.12) launchJumper(8 + rnd() * 30, -20 - rnd() * 25);
@@ -1341,6 +1393,20 @@ function frame(ts) {
   gradePass.uniforms.uAberration.value = clamp((S.speed - 9) / 6, 0, 1) * 0.012 + (S.airborne ? 0.004 : 0);
 
   audio.update({ speed: S.speed, pedaling: S.pedaling, night: info.night, cadence: S.cadence, airborne: S.airborne });
+}
+
+function frame(ts) {
+  // 壁纸锁帧：没到下一帧的时间点就跳过去，等于把 60Hz 的 rAF 压到 30fps，省电也不影响观感
+  if (WP_GAP && ts - wpLastDraw < WP_GAP - 1) {
+    requestAnimationFrame(frame);
+    return;
+  }
+  wpLastDraw = ts;
+  timer.update(ts);
+  let dt = Math.min(timer.getDelta(), 1 / 20);
+  if (fixedDt) dt = +fixedDt;
+  if (S.paused) dt = 0;
+  step(dt);
   updateHud(dt, info);
 
   composer.render();
@@ -1364,6 +1430,9 @@ addEventListener('resize', () => {
 // 首帧前预热一次，避免开场卡顿
 world.update(0, 0, 0, env);
 refreshEnv();
+// 壁纸是长时间挂着的画面，第一帧就要是「骑了一会儿」的样子：
+// 空推 3 秒，让围巾、坐姿 IK、锁定的镜头位置、粒子都落到稳态，避免刚进入时那一下晃动。
+if (WP) for (let i = 0; i < 180; i++) step(1 / 60);
 requestAnimationFrame(frame);
 $('#loading')?.remove();
 document.body.classList.add('ready');
@@ -1385,12 +1454,14 @@ window.__pelican = {
   S,
   settings,
   setCamMode,
+  setTimeOfDay,
+  TIME_PRESETS,
   jump,
   trick,
   honk,
   ringBell,
-  spawnFish,
   launchJumper,
+  audio,
   cine,
   renderer,
   get fps() {
