@@ -1,9 +1,13 @@
-<h1 align="center">claude-opus-5-5-demo</h1>
+<h1 align="center">pelican-cruise</h1>
+
+<p align="center">
+  <b>鹈鹕巡航</b> —— 一个 Three.js 海岸公路骑行游戏，附带桌面动态壁纸与浏览器新标签页插件
+</p>
 
 <p align="center">
   <b>一句话提示词 · One Shot —— Claude Opus 5.5 代码生成能力实测</b>
   <br />
-  三个可玩的 3D 网页游戏，每个游戏只给一句提示词，单会话生成，代码零人工改动，直接部署上线。
+  一个可玩的 3D 网页游戏，只给一句提示词，单会话生成，代码零人工改动，直接部署上线。
 </p>
 
 <p align="center">
@@ -11,15 +15,17 @@
   <img src="https://img.shields.io/badge/Three.js-r186-049EF4?style=for-the-badge&logo=threedotjs&logoColor=white" alt="Three.js r186" />
   <img src="https://img.shields.io/badge/esbuild-%E2%89%A50.28-FFCF00?style=for-the-badge&logo=esbuild&logoColor=black" alt="esbuild" />
   <a href="https://pages.cloudflare.com/"><img src="https://img.shields.io/badge/部署-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
-  <img src="https://img.shields.io/badge/提示词-每游戏%201%20句-8A2BE2?style=for-the-badge" alt="One-shot" />
+  <img src="https://img.shields.io/badge/提示词-1%20句-8A2BE2?style=for-the-badge" alt="One-shot" />
 </p>
 
 <p align="center">
   <a href="#这个仓库是什么">介绍</a> ·
-  <a href="#三个游戏">三个游戏</a> ·
+  <a href="#游戏介绍">游戏介绍</a> ·
   <a href="#提示词原文">提示词原文</a> ·
   <a href="#在线体验">在线体验</a> ·
   <a href="#本地构建">本地构建</a> ·
+  <a href="#桌面动态壁纸">桌面动态壁纸</a> ·
+  <a href="#浏览器新标签页">浏览器新标签页</a> ·
   <a href="#仓库结构">仓库结构</a> ·
   <a href="#生成过程与验证">生成过程与验证</a>
 </p>
@@ -28,110 +34,127 @@
 
 ## 这个仓库是什么
 
-用 [Claude Opus 5.5](https://www.anthropic.com/claude/opus)（Claude Code CLI，1M 上下文，xhigh 推理强度）做的一次代码生成能力实测：**每个游戏只给一句话提示词，单会话 one-shot 生成，全程零人工改动代码，生成后直接部署上线可玩。**
+用 [Claude Opus 5.5](https://www.anthropic.com/claude/opus)（Claude Code CLI，1M 上下文，xhigh 推理强度）做的一次代码生成能力实测：**只给一句话提示词，单会话 one-shot 生成，全程零人工改动代码，生成后直接部署上线可玩。**
+
+本仓库是在该原版基础上的**二次开发版**：只留下鹈鹕骑车，另外两个游戏已移除，并在玩法、时段、音效、桌面壁纸与浏览器插件几方面做了改动，详见下方的[二开改动记录](#二开改动记录)。
 
 规则很简单：
 
-- **一句话提示词** — 每个游戏的需求描述只有一句话，不写需求文档、不给参考代码、不做多轮追问
-- **单会话生成** — 每个游戏在一个会话内完成：查资料、搭工程、写代码、构建、测试、部署全部由模型自主进行
+- **一句话提示词** — 需求描述只有一句话，不写需求文档、不给参考代码、不做多轮追问
+- **单会话生成** — 在一个会话内完成：查资料、搭工程、写代码、构建、测试、部署全部由模型自主进行
 - **零人工改动** — 仓库里的源码就是模型写出的原样，人工没有改过一行；连本 README 也是模型写的
-- **真实部署** — 三个游戏都部署在 Cloudflare Pages 上，点开链接即可玩
+- **真实部署** — 部署在 Cloudflare Pages 上，点开链接即可玩
 
-三个游戏全部是单文件 HTML（esbuild 打包内联，无外部资源依赖）：模型、纹理、动画、音效全部由代码程序化生成，不引用任何图片、音频或第三方素材。
+工程是单文件 HTML（esbuild 打包内联，无外部资源依赖）：模型、纹理、动画、音效全部由代码程序化生成，不引用任何图片、音频或第三方素材。
 
-## 三个游戏
+## 游戏介绍
 
 | 游戏 | 类型 | 源码目录 | 模块数 | 构建产物 | 在线体验 |
 | --- | --- | --- | --- | --- | --- |
 | 🚲 鹈鹕骑自行车 | 海岸公路休闲骑行 | `pelican-bike/` | 11 个 JS 模块 | ~800 KB | [claude-opus-5-5.riba2534.cn](https://claude-opus-5-5.riba2534.cn/) |
-| 🔫 穿越火线·运输船 | FPS 团队枪战 | `cf-transport-ship/` | 18 个 JS 模块 + HTML/CSS | ~840 KB | [claude-opus-5-5-cf-transport-ship.pages.dev](https://claude-opus-5-5-cf-transport-ship.pages.dev) |
-| 🏎️ QQ 飞车 | 竞速漂移 racing | `qq-speed/` | 15 个 JS 模块 + HTML | ~700 KB | [claude-opus-5-5-qqfeiche3d.pages.dev](https://claude-opus-5-5-qqfeiche3d.pages.dev/) |
 
 ### 🚲 鹈鹕骑自行车
 
-戴头盔墨镜、脖子系红围巾的鹈鹕在海岸公路上骑车抓鱼。围巾是布料物理模拟，昼夜循环从黄昏到星空月夜，海面有波浪与岸边碎浪。W/S 加减速、A/D 变道抓鱼、空格跳跃、T 展翅抬前轮；14 个成就、5 种镜头（含电影运镜和鹈鹕视角）、浏览器实时合成的音效音乐（节奏跟随踏频）、触屏按钮与按帧率自适应画质。不操作时它会自动驾驶去追鱼。
+戴头盔墨镜、脖子系红围巾的鹈鹕在海岸公路上骑车兜风。围巾是布料物理模拟，海面有波浪与岸边碎浪；时段可在**清晨 / 白天 / 傍晚 / 晚上**四档之间手动切换（也可微调具体时刻）。W/S 加减速、A/D 变道、空格跳跃、T 展翅抬前轮；10 个成就、5 种镜头（含电影运镜和鹈鹕视角）、浏览器实时合成的音效与轻柔氛围音乐、触屏按钮与按帧率自适应画质。不操作时它会自动巡航变道。
 
-### 🔫 穿越火线·运输船
+**声音都能单独调**：主音量、海浪/风声音量（可拖到 0 或一键关闭）、音乐音量各自独立；背景音乐除了内置的实时合成氛围乐，还能上传自己的 MP3 当播放列表。
 
-还原《穿越火线》经典地图「运输船」：模型先检索了官方布局图与攻略核对地图结构（长条形甲板、两端船舱出生点、中部 V 形斜放集装箱、两侧单向管道），再按考据结果搭建。完整的 FPS 玩法：枪械弹道与后坐力、 bots AI 对战、命中反馈与击杀播报、程序化合成的枪声与音效、触屏支持。
+### 二开改动记录
 
-### 🏎️ QQ 飞车
+本仓库在原 one-shot 生成的基础上做过二次开发，改动如下：
 
-还原《QQ 飞车》的键位与漂移玩法（Shift 漂移、Ctrl 氮气、小喷与双喷、复位键），内置四张按官方地图风格设计的赛道：十一城（城市夜景 11 处弯 + 发卡弯）、情迷爱琴海（爬坡连续弯）、法老金字塔（直道末端跳台）、雪地大冒险（8 字形立交）。赛道形状先用脚本生成俯视图检查弯道与交叉点，再进入正式开发。
+| 改动 | 说明 | 涉及文件 |
+| --- | --- | --- |
+| 移除吃鱼玩法 | 删掉可收集鱼、嘴部碰撞判定、鱼分数 HUD、4 个鱼类成就、自动驾驶追鱼逻辑与吞鱼动画/音效 | `main.js` `pelican.js` `audio.js` `index.template.html` |
+| 四档时段手动设置 | 新增 清晨/白天/傍晚/晚上 预设，HUD 按钮、参数面板下拉与 <kbd>N</kbd> 都能切；默认关闭时间自动流动 | `main.js` `index.template.html` |
+| 更轻柔的音乐 | 生成式音乐改为慢速氛围铺底（无鼓点），音乐总线加低通削高频，环境音整体降噪 | `audio.js` |
+| 自定义背景音乐 | 支持上传 MP3（多选、循环播放），与生成式音乐互斥；HUD 🎧 与参数面板两个入口 | `audio.js` `main.js` `index.template.html` |
+| 海浪/风声可控 | 环境音走独立总线，参数面板新增「海浪 / 风声音量」滑块与「海浪与风声」开关，HUD 🌊 一键开关 | `audio.js` `main.js` `index.template.html` |
+| 桌面动态壁纸模式 | 新增 `wallpaper.html` 产物：自动骑行、界面全隐藏、输入不响应、不启动音频、锁 30fps；默认清晨 + 追随镜头 + 6 km/h 定速；首帧前空推 3 秒预热，从稳态开始（无起步加速与镜头推拉）；时段/镜头/车速或踏频/画质/帧率写在文件内可编辑的配置段里 | `main.js` `index.template.html` `build.mjs` `WALLPAPER.md` |
+| 浏览器新标签页插件 | 新增 `dist/extension/`（Manifest V3，`chrome_url_overrides.newtab`）：装完新建标签页即壁纸同款画面；因扩展页面 CSP 禁内联脚本，拆成 `config.js`（同步执行，先于首帧加 `.wp`）+ `app.js`；附 4 个尺寸图标与可拷走的 zip | `build.mjs` `extension/` `EXTENSION.md` |
+| 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文
 
-每个游戏的完整输入就下面这一句话，一字未改：
-
-### 🚲 鹈鹕骑自行车
+完整输入就下面这一句话，一字未改：
 
 > 生成一个鹈鹕骑自行车的 3D 页面，尽可能把你所有的能力全部都用上. 然后上传到 CDN 上, 把访问链接给我
 
-### 🔫 穿越火线·运输船
-
-> 尽可能真实的还原穿越火线中的运输船地图，我需要一个真实的枪战游戏，生成一个3d页面，尽可能发挥你的所有能力
-> 做完之后上传到 CDN 上 把链接发给我
-
-### 🏎️ QQ 飞车
-
-> 尽可能真实地还原 QQ 飞车中的游戏地图。我需要一个真实的 QQ 飞车游戏，包括游戏的各种键位以及漂移玩法,生成一个3D 页面，尽可能发挥你的所有能力。
-> 做完之后上传到 CDN 上 把链接发给我
-
 ## 在线体验
 
-| 游戏 | 地址 |
-| --- | --- |
-| 鹈鹕骑自行车 | <https://claude-opus-5-5.riba2534.cn/> |
-| 穿越火线·运输船 | <https://claude-opus-5-5-cf-transport-ship.pages.dev> |
-| QQ 飞车 | <https://claude-opus-5-5-qqfeiche3d.pages.dev/> |
+原作者部署的**原版**（未含本仓库的二开改动，仍有吃鱼玩法）：
+
+<https://claude-opus-5-5.riba2534.cn/>
+
+本仓库的二开版目前只提供源码，克隆后按上面的构建命令自行构建运行。
 
 ## 本地构建
 
-三个工程结构相同：`src/` 源码经 esbuild 打包内联进单个 HTML，无运行时外部依赖。
+`src/` 源码经 esbuild 打包内联进单个 HTML，无运行时外部依赖。
 
 ```bash
-# 任选一个游戏目录
-cd pelican-bike   # 或 cf-transport-ship / qq-speed
+cd pelican-bike
 
 npm install       # 安装依赖（three、esbuild 等）
-node build.mjs    # 构建产物输出到 dist/index.html
+node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（壁纸）、dist/extension/（浏览器插件）
 
 # 直接用浏览器打开 dist/index.html 即可游玩
 ```
 
+> 若 `npm install` 报 502：仓库里的 `package-lock.json` 记录的是作者内网的 npm 镜像地址，换台机器就拉不到。绕过锁文件、改用可达的源即可：
+>
+> ```bash
+> npm install --no-package-lock --registry=https://registry.npmmirror.com
+> ```
+
+## 桌面动态壁纸
+
+构建产物里的 `dist/wallpaper.html` 就是**隐藏界面之后的骑行画面**，可以拿来当 Windows 桌面动态壁纸：
+
+- 自动开始巡航，默认固定在**清晨**光线的**追随**机位，车速定在 **6 km/h**，没有开场遮罩和任何界面元素
+- 从第一帧起就是稳态：没有起步加速、镜头也不推拉，不会出现刚进入时晃一下再正常骑的过渡
+- 鼠标、键盘都不响应（不会挡住桌面图标操作），也不启动音频
+- 默认锁 30fps 省电，画质自适应仍在
+- 时段 / 镜头 / 车速 / 画质 / 帧率都写在文件里**一小段可直接编辑的配置**里，记事本改一行就行
+
+装一个免费的 [Lively Wallpaper](https://github.com/rocksdanister/lively)，把 `wallpaper.html` 拖进去即可。完整步骤（含可选时段、夜景、4K 屏调优、Wallpaper Engine 方案、常见问题）见 **[WALLPAPER.md](./WALLPAPER.md)**。
+
+## 浏览器新标签页
+
+同一套画面也做成了 **Chrome / Edge 插件**：装完以后，每次**新建标签页就是那只鹈鹕在骑车**——和桌面壁纸完全一致（清晨 + 跟随镜头 + 6 km/h 定速、界面全隐藏、鼠标键盘不响应、不出声、锁 30fps）。
+
+- 插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页
+- 零权限、零网络请求，约 807 KB（含 4 个尺寸图标），完全离线
+- `dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装
+- 时段 / 镜头 / 车速 / 画质 / 帧率同样写在一小段可直接编辑的配置里（`config.js`）；把 `enabled` 改成 `false`，新标签页就变成**可以玩**的完整游戏
+
+安装方式：`chrome://extensions` → 打开开发者模式 → 加载已解压的扩展程序 → 选中 `dist/extension` 文件夹。完整步骤与常见问题见 **[EXTENSION.md](./EXTENSION.md)**。
+
 ## 仓库结构
 
 ```
-├── pelican-bike/          # 鹈鹕骑自行车
-│   ├── src/               # 11 个模块：pelican / bicycle / ocean / fish / sky / effects / audio ...
-│   ├── index.template.html# 页面模板（构建时注入 og:image 与打包后的 JS）
-│   ├── build.mjs          # esbuild 构建脚本
-│   └── package.json
-├── cf-transport-ship/     # 穿越火线·运输船
-│   ├── src/               # 18 个模块：map / guns / weapons / bots / player / physics / viewmodel ...
-│   ├── build.mjs
-│   └── package.json
-├── qq-speed/              # QQ 飞车
-│   ├── src/               # 15 个模块：vehicle / track / layouts / ai / maps / items ...
-│   ├── build.mjs
-│   ├── wrangler.jsonc     # Cloudflare Pages 部署配置
-│   └── package.json
-└── README.md
+├── WALLPAPER.md            # 桌面动态壁纸的安装与调参说明（Windows 10 / Lively）
+├── EXTENSION.md            # 浏览器插件（新标签页）的安装与调参说明
+└── pelican-bike/           # 鹈鹕骑自行车
+    ├── src/                # 11 个模块：pelican / bicycle / ocean / fish / sky / effects / audio ...
+    ├── extension/          # 插件的静态资源：manifest.json + icon16/32/48/128.png
+    ├── index.template.html # 页面模板（构建时注入 og:image 与打包后的 JS）
+    ├── build.mjs           # esbuild 构建脚本，一次产出 index.html + wallpaper.html + extension/
+    └── package.json
 ```
 
 仓库只保存源码；`node_modules/`、`dist/` 构建产物不入库，克隆后执行上面的构建命令即可完整还原。
 
 ## 生成过程与验证
 
-生成过程中模型自主完成的事情（摘录自各会话记录）：
+生成过程中模型自主完成的事情（摘录自会话记录）：
 
-- **资料考据** — 穿越火线与 QQ 飞车在动手前先联网检索官方地图布局图、键位表与攻略核对细节（运输船的集装箱摆位、QQ 飞车的 Shift 漂移 / Ctrl 氮气键位），不是凭印象瞎写
-- **自测** — 全部用无头浏览器实测：加载运行无报错、模拟按键跑完整对局；鹈鹕骑车做了 320 秒快进浸泡测试（跑完一整个昼夜循环，几何体 / 纹理数量恒定，JS 堆 16–26 MB 平稳无泄漏），并专门跨过 36 km 里程取模边界验证
-- **自我审查** — 鹈鹕工程在交付前派子代理独立审查代码，找出 12 个问题并全部修复（如长时间骑行后海面跳变、切换画质漏显存）
-- **线上修复** — 鹈鹕上线后偶发黑屏，模型通过人为注入 NaN 复现定位（Bloom 遇无效像素扩散成黑块），加了泛光前清理 pass 并修了海面菲涅尔等两处源头，重新部署
-- **部署运维** — 三个游戏分别完成 CDN 上传与缓存刷新、Cloudflare Pages 项目创建、域名绑定与证书等待、旧项目清理核对
+- **自测** — 用无头浏览器实测：加载运行无报错、模拟按键跑完整骑行；做了 320 秒快进浸泡测试（跑完一整个昼夜循环，几何体 / 纹理数量恒定，JS 堆 16–26 MB 平稳无泄漏），并专门跨过 36 km 里程取模边界验证
+- **自我审查** — 交付前派子代理独立审查代码，找出 12 个问题并全部修复（如长时间骑行后海面跳变、切换画质漏显存）
+- **线上修复** — 上线后偶发黑屏，模型通过人为注入 NaN 复现定位（Bloom 遇无效像素扩散成黑块），加了泛光前清理 pass 并修了海面菲涅尔等两处源头，重新部署
+- **部署运维** — 完成 CDN 上传与缓存刷新、Cloudflare Pages 项目创建、域名绑定与证书等待
 
 ## 说明
 
-- 本仓库由 Claude Opus 5.5 在 Claude Code 中生成（2026-09）；三个游戏的源码、README 均为模型输出原样，人工未做改动
-- 游戏为能力测试用途的致敬作品，与《穿越火线》《QQ 飞车》原厂无关
+- 原始版本由 Claude Opus 5.5 在 Claude Code 中生成（2026-09），源码与 README 为模型输出原样
+- 本仓库在其基础上做过二次开发，具体改动见上面的「二开改动记录」
