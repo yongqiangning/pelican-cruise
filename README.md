@@ -71,7 +71,9 @@
 | 自定义背景音乐 | 支持上传 MP3（多选、循环播放），与生成式音乐互斥；HUD 🎧 与参数面板两个入口 | `audio.js` `main.js` `index.template.html` |
 | 海浪/风声可控 | 环境音走独立总线，参数面板新增「海浪 / 风声音量」滑块与「海浪与风声」开关，HUD 🌊 一键开关 | `audio.js` `main.js` `index.template.html` |
 | 桌面动态壁纸模式 | 新增 `wallpaper.html` 产物：自动骑行、界面全隐藏、输入不响应、不启动音频、锁 30fps；默认清晨 + 追随镜头 + 6 km/h 定速；首帧前空推 3 秒预热，从稳态开始（无起步加速与镜头推拉）；时段/镜头/车速或踏频/画质/帧率写在文件内可编辑的配置段里 | `main.js` `index.template.html` `build.mjs` `WALLPAPER.md` |
-| 浏览器新标签页插件 | 新增 `dist/extension/`（Manifest V3，`chrome_url_overrides.newtab`）：装完新建标签页即壁纸同款画面；因扩展页面 CSP 禁内联脚本，拆成 `config.js`（同步执行，先于首帧加 `.wp`）+ `app.js`；附 4 个尺寸图标与可拷走的 zip | `build.mjs` `extension/` `EXTENSION.md` |
+| 浏览器新标签页插件 | 新增 `dist/extension/`（Manifest V3，`chrome_url_overrides.newtab`）：装完新建标签页即同款画面；因扩展页面 CSP 禁内联脚本，拆成 `config.js`（同步执行，先于首帧加 `.wp`）+ `app.js`；附 4 个尺寸图标与可拷走的 zip | `build.mjs` `extension/` `EXTENSION.md` |
+| 插件底部控制条 | 新标签页底部新增一条控制条：速度滑块（2–30 km/h，改速度时重挑档位，踏频不跑飞）、四档时段、动作（跳跃 / 特技 / 车铃 / 大叫）、五档镜头、声音开关（默认关，点了才启动音频）；鼠标与键盘交互一并放开（点鹈鹕会叫、可拖拽转视角）；`ui` 可整体关掉或按项裁剪，桌面壁纸版完全不受影响 | `main.js` `index.template.html` `EXTENSION.md` |
+| 构建自动压 zip | 每次构建顺手把 `dist/extension/` 压成 `pelican-newtab-extension.zip`，不再需要手工打包（纯 Node 手写，不调系统 `zip` 命令，Windows 也能构建；时间戳写死，产物可复现） | `build.mjs` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文
@@ -121,12 +123,20 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 
 ## 浏览器新标签页
 
-同一套画面也做成了 **Chrome / Edge 插件**：装完以后，每次**新建标签页就是那只鹈鹕在骑车**——和桌面壁纸完全一致（清晨 + 跟随镜头 + 6 km/h 定速、界面全隐藏、鼠标键盘不响应、不出声、锁 30fps）。
+同一套画面也做成了 **Chrome / Edge 插件**：装完以后，每次**新建标签页就是那只鹈鹕在骑车**——清晨 + 跟随镜头 + 6 km/h 定速起步、界面全隐藏、锁 30fps。
 
-- 插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页
-- 零权限、零网络请求，约 807 KB（含 4 个尺寸图标），完全离线
-- `dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装
-- 时段 / 镜头 / 车速 / 画质 / 帧率同样写在一小段可直接编辑的配置里（`config.js`）；把 `enabled` 改成 `false`，新标签页就变成**可以玩**的完整游戏
+比桌面壁纸多一条**底部控制条**，所以新标签页不只是看着，也能上手：
+
+- **速度**：拖滑块，2–30 km/h 随便定（松开 W/S 后会自动回到这个速度）
+- **时段**：清晨 / 白天 / 傍晚 / 晚上 一键切
+- **动作**：跳跃、特技（展翅 + 抬前轮）、按车铃、鹈鹕大叫
+- **镜头**：追随 / 侧拍 / 电影 / 鹈鹕视角 / 自由环绕
+- **声音**：默认关，点一下开（音乐 + 海浪风声 + 音效），切走标签页自动静音
+- 键盘同样可用：<kbd>W</kbd><kbd>S</kbd><kbd>A</kbd><kbd>D</kbd>、<kbd>空格</kbd>、<kbd>T</kbd>、<kbd>B</kbd>、<kbd>H</kbd>、<kbd>C</kbd>、<kbd>N</kbd>、<kbd>M</kbd>、<kbd>U</kbd>
+
+插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页；零权限、零网络请求，约 812 KB（含 4 个尺寸图标），完全离线。`dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装。
+
+时段 / 镜头 / 车速 / 画质 / 帧率同样写在一小段可直接编辑的配置里（`config.js`）：把 `window.__PELICAN_WP.ui` 改成 `false` 就退回与桌面壁纸一致的纯画面（还可以写成对象只留部分控件），把 `enabled` 改成 `false` 则新标签页变成**可以玩**的完整游戏。
 
 安装方式：`chrome://extensions` → 打开开发者模式 → 加载已解压的扩展程序 → 选中 `dist/extension` 文件夹。完整步骤与常见问题见 **[EXTENSION.md](./EXTENSION.md)**。
 
