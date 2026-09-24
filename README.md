@@ -73,6 +73,7 @@
 | 桌面动态壁纸模式 | 新增 `wallpaper.html` 产物：自动骑行、界面全隐藏、输入不响应、不启动音频、锁 30fps；默认清晨 + 追随镜头 + 6 km/h 定速；首帧前空推 3 秒预热，从稳态开始（无起步加速与镜头推拉）；时段/镜头/车速或踏频/画质/帧率写在文件内可编辑的配置段里 | `main.js` `index.template.html` `build.mjs` `WALLPAPER.md` |
 | 浏览器新标签页插件 | 新增 `dist/extension/`（Manifest V3，`chrome_url_overrides.newtab`）：装完新建标签页即同款画面；因扩展页面 CSP 禁内联脚本，拆成 `config.js`（同步执行，先于首帧加 `.wp`）+ `app.js`；附 4 个尺寸图标与可拷走的 zip | `build.mjs` `extension/` `EXTENSION.md` |
 | 插件底部控制条 | 新标签页底部新增一条控制条：速度滑块（2–30 km/h，改速度时重挑档位，踏频不跑飞）、四档时段、动作（跳跃 / 特技 / 车铃 / 大叫）、五档镜头、声音开关（默认关，点了才启动音频）；鼠标与键盘交互一并放开（点鹈鹕会叫、可拖拽转视角）；`ui` 可整体关掉或按项裁剪，桌面壁纸版完全不受影响 | `main.js` `index.template.html` `EXTENSION.md` |
+| 新标签页桌面层 | 新标签页加了时钟（带农历，用浏览器内置中国历法）、搜索框（引擎可切、网址自动识别直开）、可增删拖拽的快捷网址（删错 8 秒撤销、图标自动降级为首字色块），以及右上角树叶一键收起（状态持久化、首帧同步所以不闪）；焦点在输入框 / 按钮时游戏让开键盘，且不再每次开标签页弹提示；桌面层只随插件产物构建，游戏版与壁纸版一个字节都不带 | `extension/home.html` `home.css` `home.js` `home-boot.js` `build.mjs` |
 | 构建自动压 zip | 每次构建顺手把 `dist/extension/` 压成 `pelican-newtab-extension.zip`，不再需要手工打包（纯 Node 手写，不调系统 `zip` 命令，Windows 也能构建；时间戳写死，产物可复现） | `build.mjs` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
@@ -123,9 +124,16 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 
 ## 浏览器新标签页
 
-同一套画面也做成了 **Chrome / Edge 插件**：装完以后，每次**新建标签页就是那只鹈鹕在骑车**——清晨 + 跟随镜头 + 6 km/h 定速起步、界面全隐藏、锁 30fps。
+同一套画面也做成了 **Chrome / Edge 插件**：装完以后，每次**新建标签页就是那只鹈鹕在骑车**——清晨 + 跟随镜头 + 6 km/h 定速起步、锁 30fps。
 
-比桌面壁纸多一条**底部控制条**，所以新标签页不只是看着，也能上手：
+比桌面壁纸多**一层桌面信息**：
+
+- **时钟**：正上方大字号，下面一行「9月25日 星期五 八月十五」，农历用浏览器内置的中国历法算，不自己维护月相表
+- **搜索框**：输入关键词去搜，输入网址（`github.com`、`localhost:3000`）直接打开；左侧小图标可切必应 / 百度 / Google / 搜狗 / 知乎 / B 站；按 <kbd>/</kbd> 直接聚焦
+- **快捷网址**：预置 12 个常用站点，可增删改、拖拽排序，删错有 8 秒撤销；图标自动去站点取 favicon，取不到就退成名称首字的彩色方块
+- **右上角一片树叶**：点一下把这一层全收起来、只留画面，再点一下放回来——状态会记住，快捷键 <kbd>L</kbd>
+
+还有**一条底部控制条**，所以新标签页不只是看着，也能上手：
 
 - **速度**：拖滑块，2–30 km/h 随便定（松开 W/S 后会自动回到这个速度）
 - **时段**：清晨 / 白天 / 傍晚 / 晚上 一键切
@@ -134,9 +142,9 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 - **声音**：默认关，点一下开（音乐 + 海浪风声 + 音效），切走标签页自动静音
 - 键盘同样可用：<kbd>W</kbd><kbd>S</kbd><kbd>A</kbd><kbd>D</kbd>、<kbd>空格</kbd>、<kbd>T</kbd>、<kbd>B</kbd>、<kbd>H</kbd>、<kbd>C</kbd>、<kbd>N</kbd>、<kbd>M</kbd>、<kbd>U</kbd>
 
-插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页；零权限、零网络请求，约 812 KB（含 4 个尺寸图标），完全离线。`dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装。
+插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页；**不申请任何权限**（连 `storage` 都没要，数据存在扩展自己的 localStorage 里），约 847 KB（含 4 个尺寸图标），完全离线——唯一会联网的是你点开的网页，以及浏览器为快捷网址取一次站点自己的 `favicon.ico`（不经过第三方图标服务）。`dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装。
 
-时段 / 镜头 / 车速 / 画质 / 帧率同样写在一小段可直接编辑的配置里（`config.js`）：把 `window.__PELICAN_WP.ui` 改成 `false` 就退回与桌面壁纸一致的纯画面（还可以写成对象只留部分控件），把 `enabled` 改成 `false` 则新标签页变成**可以玩**的完整游戏。
+时段 / 镜头 / 车速 / 画质 / 帧率同样写在一小段可直接编辑的配置里（`config.js`）：`window.__PELICAN_WP.ui` 管底部控制条，`window.__PELICAN_WP.home` 管时钟 / 搜索 / 快捷网址那一层，任意一个设成 `false` 就少一层，两个都关就是与桌面壁纸完全一致的纯画面；把 `enabled` 改成 `false` 则新标签页变成**可以玩**的完整游戏。
 
 安装方式：`chrome://extensions` → 打开开发者模式 → 加载已解压的扩展程序 → 选中 `dist/extension` 文件夹。完整步骤与常见问题见 **[EXTENSION.md](./EXTENSION.md)**。
 
@@ -147,7 +155,8 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 ├── EXTENSION.md            # 浏览器插件（新标签页）的安装与调参说明
 └── pelican-bike/           # 鹈鹕骑自行车
     ├── src/                # 11 个模块：pelican / bicycle / ocean / fish / sky / effects / audio ...
-    ├── extension/          # 插件的静态资源：manifest.json + icon16/32/48/128.png
+    ├── extension/          # 插件资源：manifest.json + icon16/32/48/128.png，
+    │                       # 以及桌面层的 home.html（片段）/ home.css / home.js / home-boot.js
     ├── index.template.html # 页面模板（构建时注入 og:image 与打包后的 JS）
     ├── build.mjs           # esbuild 构建脚本，一次产出 index.html + wallpaper.html + extension/
     └── package.json
