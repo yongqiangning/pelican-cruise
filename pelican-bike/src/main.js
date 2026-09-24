@@ -27,6 +27,12 @@ const $ = (s) => document.querySelector(s);
 const WPC = window.__PELICAN_WP || {};
 const WP = qp('wp', WPC.enabled ? '1' : '0') === '1';
 if (WP) document.documentElement.classList.add('wp');
+// 新标签页插件的控制条：WPC.ui = true 全开，也可以给个对象按项开关
+// （speed 速度滑块 / tod 时段 / acts 动作 / cams 镜头 / sound 声音）。
+// 桌面壁纸版不带控制条 —— 桌面上那个窗口连鼠标都不属于它，控件没意义，也挡图标。
+const uiCfg = WPC.ui ?? (qp('ui', '0') === '1');
+const NP = WP && uiCfg ? (uiCfg === true ? { speed: true, tod: true, acts: true, cams: true, sound: true } : uiCfg) : null;
+if (NP) document.documentElement.classList.add('wpui');
 // >0 表示锁帧（壁纸模式默认 30，省电、也不至于看着卡）
 const WP_FPS = WP ? +qp('maxfps', WPC.fps || 30) : 0;
 const WP_GAP = WP_FPS > 0 ? 1000 / WP_FPS : 0;
@@ -251,7 +257,7 @@ const settings = {
   helmet: true,
   glasses: qp('glasses', 'auto'),
   scarf: true,
-  lookMouse: !WP,
+  lookMouse: !WP || !!NP,
   volume: 0.8,
   envVolume: +qp('env', 0.5),
   envOn: qp('envon', '1') === '1',
@@ -336,13 +342,17 @@ const S = {
 //   2) 否则 cadence > 0    → 踏频定死，车速反推，档位挑「换算车速最接近原巡航速度」的那一档
 const WHEEL_CIRC = WHEEL_R * TAU;
 const cadenceAt = (i, v) => (v / WHEEL_CIRC / (GEARS[i][0] / GEARS[i][1])) * 60;
-if (settings.kph > 0) {
-  settings.cruise = settings.kph / 3.6;
+// 挑「踏频最接近 86 rpm」的那一档，跟游戏里的自动变速是同一个目标
+const pickGearForSpeed = (v) => {
   let pick = 0;
   GEARS.forEach((_, i) => {
-    if (Math.abs(cadenceAt(i, settings.cruise) - 86) < Math.abs(cadenceAt(pick, settings.cruise) - 86)) pick = i;
+    if (Math.abs(cadenceAt(i, v) - 86) < Math.abs(cadenceAt(pick, v) - 86)) pick = i;
   });
-  S.gear = pick;
+  return pick;
+};
+if (settings.kph > 0) {
+  settings.cruise = settings.kph / 3.6;
+  S.gear = pickGearForSpeed(settings.cruise);
   settings.autoGear = false;
 } else if (settings.cadence > 0) {
   const speedFor = (i) => (settings.cadence / 60) * WHEEL_CIRC * (GEARS[i][0] / GEARS[i][1]);
@@ -359,6 +369,14 @@ if (settings.kph > 0) {
 if (WP) {
   S.speed = settings.cruise;
   S.accel = 0;
+}
+// 运行时改定速（新标签页控制条的速度滑块走这里）。档位跟着重挑，免得速度一变踏频就飞了；
+// 车速不硬跳 —— updateRide 会按 (cruise - speed) 自己加速/减速过去，看着像真的在踩。
+function setCruiseKph(v) {
+  settings.kph = v;
+  settings.cruise = v / 3.6;
+  S.gear = pickGearForSpeed(settings.cruise);
+  settings.autoGear = false;
 }
 
 const keys = {};
@@ -377,7 +395,8 @@ controls.maxPolarAngle = Math.PI * 0.495;
 controls.enablePan = false;
 controls.autoRotateSpeed = 0.55;
 // 壁纸模式下鼠标不属于这个窗口，直接关掉轨道控制，免得桌面上的点击被吃掉
-if (WP) controls.enabled = false;
+// （新标签页是正常网页，鼠标就是拿来操作的，得留着）
+if (WP && !NP) controls.enabled = false;
 controls.addEventListener('start', () => {
   S.lastOrbitInput = S.time;
   controls.autoRotate = false;
@@ -894,7 +913,7 @@ function updateHud(dt, info) {
   hudAcc += dt;
   if (hudAcc < 0.1) return;
   hudAcc = 0;
-  if (WP) return; // 壁纸模式界面全隐藏，不用每 0.1 秒写一遍这些 DOM
+  if (WP && !NP) return; // 壁纸模式界面全隐藏，不用每 0.1 秒写一遍这些 DOM
   const kmh = S.speed * 3.6;
   hud.speed.textContent = kmh.toFixed(0);
   hud.arc.style.strokeDashoffset = `${ARC_LEN * (1 - clamp(kmh / 55, 0, 1))}`;
@@ -969,7 +988,7 @@ const KEYMAP = {
   ArrowRight: 'right',
 };
 addEventListener('keydown', (e) => {
-  if (WP) return; // 壁纸模式不接键盘
+  if (WP && !NP) return; // 壁纸模式不接键盘（新标签页要接：W/S 加减速、A/D 变道、空格跳、T 特技）
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLAnchorElement) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = KEYMAP[e.code];
@@ -1041,20 +1060,20 @@ addEventListener('blur', () => {
 
 const down = { x: 0, y: 0, t: 0 };
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (WP) return;
+  if (WP && !NP) return;
   down.x = e.clientX;
   down.y = e.clientY;
   down.t = performance.now();
 });
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (WP) return;
+  if (WP && !NP) return;
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   S.lastPointer = S.time;
   // 在其它镜头下拖拽，自动切到自由环绕
   if (e.buttons && camMode !== 'orbit' && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) setCamMode('orbit');
 });
 renderer.domElement.addEventListener('pointerup', (e) => {
-  if (WP) return;
+  if (WP && !NP) return;
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || performance.now() - down.t > 450) return;
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
@@ -1111,6 +1130,41 @@ document.querySelectorAll('[data-act]').forEach((b) => {
 });
 document.querySelectorAll('[data-cam]').forEach((b) => b.addEventListener('click', () => setCamMode(b.dataset.cam)));
 document.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('click', () => setTimeOfDay(b.dataset.time)));
+
+// ---------------- 新标签页控制条（浏览器插件专用） ----------------
+// 时段 / 动作 / 镜头按钮用的就是 HUD 那一套 data-time / data-act / data-cam 标记，
+// 上面几行 querySelectorAll 已经把事件绑好了（高亮同步也是），这里只补速度滑块和声音开关。
+if (NP) {
+  const speed = $('#npSpeed');
+  const speedVal = $('#npSpeedVal');
+  if (speed && speedVal && NP.speed) {
+    speed.value = String(clamp(settings.kph > 0 ? settings.kph : settings.cruise * 3.6, +speed.min, +speed.max));
+    const sync = () => {
+      speedVal.textContent = (+speed.value).toFixed(1);
+    };
+    speed.addEventListener('input', () => {
+      setCruiseKph(+speed.value);
+      sync();
+    });
+    sync();
+  }
+  // 声音默认关着：新标签页动不动就出声很烦，点一下才启动音频（顺便满足浏览器的自动播放策略）
+  const snd = $('#npSound');
+  if (snd && NP.sound) {
+    let soundOn = false;
+    snd.addEventListener('click', () => {
+      soundOn = !soundOn;
+      if (soundOn) ensureAudio();
+      audio.setVolume(soundOn ? settings.volume : 0);
+      snd.classList.toggle('on', soundOn);
+      toast(soundOn ? '🔊' : '🔇', soundOn ? '声音：开' : '声音：关', '音乐、海浪风声可在参数面板 → 声音里细调');
+    });
+  }
+  // 配置里关掉的组直接藏起来（默认全开）
+  for (const [key, cls] of Object.entries({ speed: '.np-speed', tod: '.np-tod', acts: '.np-acts', cams: '.np-cams', sound: '.np-sound' })) {
+    if (!NP[key]) $(`#npbar ${cls}`)?.setAttribute('hidden', '');
+  }
+}
 
 function ensureAudio() {
   if (!audio.ctx) {
@@ -1302,6 +1356,11 @@ function start(withSound) {
   }
   setCamMode(Q.has('cam') ? camMode : WP ? WPC.cam || 'cine' : 'orbit'); // 壁纸默认电影运镜
   if (!WP) setTimeout(() => toast('🐦', '出发！', isTouch ? '点屏幕按钮加速、变道、跳跃' : 'W/S 加减速 · A/D 变道 · 空格跳 · T 特技'), 900);
+  else if (NP)
+    setTimeout(
+      () => toast('🐦', '新标签页里骑行中', `下面一排能调速、切时段、做动作${isTouch ? '' : '；键盘 W/S/A/D、空格跳、T 特技也能用'}`),
+      900,
+    );
 }
 $('#startBtn').addEventListener('click', () => start(true));
 $('#startMute').addEventListener('click', () => {
@@ -1456,6 +1515,8 @@ window.__pelican = {
   setCamMode,
   setTimeOfDay,
   TIME_PRESETS,
+  NP,
+  setCruiseKph,
   jump,
   trick,
   honk,

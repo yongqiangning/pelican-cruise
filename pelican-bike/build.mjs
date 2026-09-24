@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'node:fs';
+import { deflateRawSync } from 'node:zlib';
 
 const minify = !process.argv.includes('--dev');
 const res = await build({
@@ -29,6 +30,10 @@ const WPC = `{
   flow: false,     // true = 昼夜缓慢流动
   dayrate: 0.025   // 时间流速（时/秒），仅 flow 打开时有效：0.025 ≈ 16 分钟过完一天
 }`;
+
+// 插件版比壁纸版多一个 ui 开关（底部控制条），由下面单独追加，这样壁纸版不会跟着长出一条控件栏。
+const npUiConfig = `/* 底部控制条：true = 可以拖速度、切时段、做动作、换镜头、开关声音；false = 纯画面（等同桌面壁纸） */
+window.__PELICAN_WP.ui = true;`;
 
 const tpl = readFileSync('index.template.html', 'utf8');
 const og = process.env.OG_IMAGE ? `<meta property="og:image" content="${process.env.OG_IMAGE}" />` : '';
@@ -68,6 +73,7 @@ writeFileSync(
   `${extDir}/config.js`,
   `/* ===== 新标签页配置：改下面这一段就行 ===== */
 window.__PELICAN_WP = ${WPC};
+${npUiConfig}
 if (window.__PELICAN_WP.enabled) document.documentElement.classList.add('wp');
 `,
 );
@@ -91,8 +97,79 @@ const extFiles = ['manifest.json', 'newtab.html', 'app.js', 'config.js', ...icon
   existsSync(`${extDir}/${f}`),
 );
 const extSize = extFiles.reduce((sum, f) => sum + readFileSync(`${extDir}/${f}`).length, 0);
+
+// 顺手压一个 zip，方便拷到别的机器再解压安装。纯 Node 手写，不调系统 zip 命令（Windows 也能构建）；
+// 时间戳写死成固定值，同样的输入就产出同样的字节，便于比对。
+const crcTable = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+const crc32 = (buf) => {
+  let c = -1;
+  for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+};
+const DOS_DATE = 0x21; // 1980-01-01，固定值
+function makeZip(entries) {
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const [name, data] of entries) {
+    const nameBuf = Buffer.from(name, 'utf8');
+    const crc = crc32(data);
+    const deflated = deflateRawSync(data, { level: 9 });
+    const packed = deflated.length < data.length ? deflated : data;
+    const method = packed === deflated ? 8 : 0;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4); // 需要的解压版本
+    local.writeUInt16LE(0x0800, 6); // 文件名按 UTF-8 解
+    local.writeUInt16LE(method, 8);
+    local.writeUInt16LE(0, 10);
+    local.writeUInt16LE(DOS_DATE, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(packed.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+    local.writeUInt16LE(0, 28);
+    parts.push(local, nameBuf, packed);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x02014b50, 0);
+    cd.writeUInt16LE(20, 4);
+    cd.writeUInt16LE(20, 6);
+    cd.writeUInt16LE(0x0800, 8);
+    cd.writeUInt16LE(method, 10);
+    cd.writeUInt16LE(0, 12);
+    cd.writeUInt16LE(DOS_DATE, 14);
+    cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(packed.length, 20);
+    cd.writeUInt32LE(data.length, 24);
+    cd.writeUInt16LE(nameBuf.length, 28);
+    cd.writeUInt32LE(0, 38);
+    cd.writeUInt32LE(offset, 42);
+    central.push(cd, nameBuf);
+    offset += local.length + nameBuf.length + packed.length;
+  }
+  const cdBuf = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(cdBuf.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...parts, cdBuf, end]);
+}
+const zipPath = 'dist/pelican-newtab-extension.zip';
+writeFileSync(zipPath, makeZip(extFiles.map((f) => [f, readFileSync(`${extDir}/${f}`)])));
+
 console.log(
   `dist/extension/ ${(extSize / 1024).toFixed(1)} KB（${extFiles.join(' + ')}${
     iconFiles.length < 4 ? `，缺 ${4 - iconFiles.length} 个图标` : ''
   }）`,
 );
+console.log(`${zipPath} ${(readFileSync(zipPath).length / 1024).toFixed(1)} KB`);

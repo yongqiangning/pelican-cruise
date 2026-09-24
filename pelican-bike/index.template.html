@@ -150,6 +150,27 @@ body.cinematic.started .dash, body.cinematic.started .score, body.cinematic.star
 html.wp, html.wp body { background: #05070f; cursor: none; }
 html.wp #intro, html.wp .hud, html.wp #toasts, html.wp #guiHost, html.wp #help, html.wp #cut, html.wp #fps { display: none !important; }
 html.wp .bars::before, html.wp .bars::after { height: 0 !important; }
+/* ---------- 新标签页控制条（浏览器插件专用；壁纸版没有，控件在桌面上没意义） ---------- */
+.npbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(20px, env(safe-area-inset-bottom)); z-index: 12; display: none; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 16px; max-width: calc(100vw - 32px); padding: 9px 16px; background: var(--glass); border: 1px solid var(--stroke); border-radius: 20px; box-shadow: var(--shadow); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); }
+html.wpui .npbar { display: flex; }
+html.wp.wpui { cursor: default; }
+html.wp.wpui #toasts { display: flex !important; }
+body.hide-ui .npbar { display: none !important; }
+.npbar .np-group { display: flex; align-items: center; gap: 6px; }
+.npbar label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.npbar input[type="range"] { -webkit-appearance: none; appearance: none; width: 128px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); outline: none; cursor: pointer; }
+.npbar input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.45); cursor: pointer; }
+.npbar .np-read { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 700; min-width: 32px; text-align: right; }
+.npbar .np-unit { font-size: 11px; color: var(--muted); }
+.npbar button { border: 1px solid var(--stroke); background: rgba(255,255,255,0.06); color: var(--muted); cursor: pointer; padding: 7px 12px; border-radius: 999px; font-size: 12.5px; white-space: nowrap; transition: all 0.15s; }
+.npbar button:hover { color: #fff; background: rgba(255,255,255,0.15); }
+.npbar button.on { color: #1a1206; background: linear-gradient(135deg, #ffd27a, #ffab5e); border-color: transparent; font-weight: 700; }
+.npbar button:active { transform: scale(0.95); }
+@media (max-width: 820px) {
+  .npbar { gap: 5px 10px; padding: 8px 12px; border-radius: 18px; }
+  .npbar input[type="range"] { width: 84px; }
+  .npbar button { padding: 6px 9px; font-size: 12px; }
+}
 #fallback { position: fixed; inset: 0; display: grid; place-items: center; z-index: 99; background: #0d1424; padding: 24px; text-align: center; }
 @media (max-width: 900px) {
   .cams { top: calc(max(14px, env(safe-area-inset-top)) + 58px); left: 16px; right: 16px; transform: none; overflow-x: auto; scrollbar-width: none; }
@@ -300,6 +321,36 @@ html.wp .bars::before, html.wp .bars::after { height: 0 !important; }
       <div class="rowb"><button class="tbtn" data-act="bell">🔔</button><button class="tbtn" data-act="trick">🪽</button><button class="tbtn" data-act="jump">⤒</button></div>
       <div class="rowb"><button class="tbtn big" data-key="down">▼</button><button class="tbtn big" data-key="up">▲</button></div>
     </div>
+  </div>
+</div>
+<!-- 新标签页插件的控制条：只在 config.js 打开 ui 时显示（html.wpui），壁纸版和普通页面都藏着 -->
+<div class="npbar" id="npbar">
+  <div class="np-group np-speed">
+    <label for="npSpeed">速度</label>
+    <input type="range" id="npSpeed" min="2" max="30" step="0.5" value="6" />
+    <b class="np-read" id="npSpeedVal">6.0</b><span class="np-unit">km/h</span>
+  </div>
+  <div class="np-group np-tod">
+    <button data-time="morning">清晨</button>
+    <button data-time="day">白天</button>
+    <button data-time="dusk">傍晚</button>
+    <button data-time="night">晚上</button>
+  </div>
+  <div class="np-group np-acts">
+    <button data-act="jump">跳跃</button>
+    <button data-act="trick">特技</button>
+    <button data-act="bell">车铃</button>
+    <button data-act="honk">大叫</button>
+  </div>
+  <div class="np-group np-cams">
+    <button data-cam="chase">追随</button>
+    <button data-cam="side">侧拍</button>
+    <button data-cam="cine">电影</button>
+    <button data-cam="pov">鹈鹕</button>
+    <button data-cam="orbit">自由</button>
+  </div>
+  <div class="np-group np-sound">
+    <button id="npSound" title="声音开关（默认关，点了才出声）">声音</button>
   </div>
 </div>
 <div id="toasts"></div>
