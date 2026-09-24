@@ -989,7 +989,18 @@ const KEYMAP = {
 };
 addEventListener('keydown', (e) => {
   if (WP && !NP) return; // 壁纸模式不接键盘（新标签页要接：W/S 加减速、A/D 变道、空格跳、T 特技）
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLAnchorElement) return;
+  // 焦点在界面控件上时不接管键盘。新标签页那层（搜索框、快捷网址、右上角树叶）全靠这一条，
+  // 漏了就会一边骑车一边往搜索框里输字。
+  const tgt = e.target;
+  if (
+    tgt instanceof HTMLInputElement ||
+    tgt instanceof HTMLTextAreaElement ||
+    tgt instanceof HTMLSelectElement ||
+    tgt instanceof HTMLAnchorElement ||
+    tgt instanceof HTMLButtonElement ||
+    tgt?.isContentEditable
+  )
+    return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = KEYMAP[e.code];
   if (k) {
@@ -1355,8 +1366,10 @@ function start(withSound) {
     audio.setMusicVolume(settings.musicVolume);
   }
   setCamMode(Q.has('cam') ? camMode : WP ? WPC.cam || 'cine' : 'orbit'); // 壁纸默认电影运镜
+  // 新标签页开着桌面层（时钟/搜索/快捷网址）时不弹这条：每开一次标签页就冒一条提示太吵，
+  // 而且底部那排控件和快捷网址本身就摆在明面上，不需要再说一遍
   if (!WP) setTimeout(() => toast('🐦', '出发！', isTouch ? '点屏幕按钮加速、变道、跳跃' : 'W/S 加减速 · A/D 变道 · 空格跳 · T 特技'), 900);
-  else if (NP)
+  else if (NP && !WPC.home)
     setTimeout(
       () => toast('🐦', '新标签页里骑行中', `下面一排能调速、切时段、做动作${isTouch ? '' : '；键盘 W/S/A/D、空格跳、T 特技也能用'}`),
       900,

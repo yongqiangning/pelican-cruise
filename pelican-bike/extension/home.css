@@ -1,0 +1,226 @@
+/* ===== 新标签页的桌面层：时钟 / 搜索 / 快捷网址 =====
+   只随插件产物走（build.mjs 把 home.html 注入 newtab.html 并复制本文件），
+   游戏版和桌面壁纸版里根本没有这一段，所以那边不受任何影响。
+   配色沿用 newtab.html 里 :root 的那套变量，和底部控制条是同一套视觉。
+   门控：html.home 决定这一层存不存在（配置里的 home 开关），
+        html.home-off 是用户点了树叶之后收起来的状态（同步读 localStorage，首帧就对）。 */
+
+#home { position: fixed; inset: 0; z-index: 11; display: none; }
+html.home #home { display: block; }
+
+/* 整层默认不吃鼠标事件：空白处还能拖拽转视角、点鹈鹕、点海面。
+   需要点/输入的元素各自把 pointer-events 打开。 */
+#home, .home-main, .home-clock, .home-search { pointer-events: none; }
+
+/* ---------- 主体：时钟 → 搜索 → 图标网格 ---------- */
+.home-main {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: clamp(14px, 2.2vh, 28px);
+  /* 底部留出控制条的位置，网格别被压在下面。
+     --npbar-h 是 home.js 量出来的真实高度（窗口一窄控制条就会折行，写死不准） */
+  padding: clamp(26px, 6.5vh, 84px) 24px calc(var(--npbar-h, 48px) + max(52px, 8vh));
+  transition: opacity 0.34s ease, transform 0.34s ease, visibility 0s linear 0s;
+}
+html.home-off .home-main {
+  opacity: 0; visibility: hidden; transform: translateY(-16px) scale(0.985);
+  transition: opacity 0.28s ease, transform 0.28s ease, visibility 0s linear 0.28s;
+}
+
+/* 时钟：白字 + 投影，落日和深夜的画面里都读得清 */
+/* 白字要压得住清晨那种亮画面，所以投影给得比常规狠一些 */
+.home-clock { text-align: center; text-shadow: 0 3px 34px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.42); }
+.hc-time { font-size: clamp(50px, 9.2vw, 124px); font-weight: 200; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.hc-date { margin-top: 0.55em; font-size: clamp(12.5px, 1.1vw, 16px); color: rgba(255, 255, 255, 0.9); letter-spacing: 0.1em; }
+
+/* ---------- 搜索框 ---------- */
+.home-search {
+  position: relative; /* 引擎下拉是相对它定位的，少了这行菜单会跑到屏幕外去 */
+  /* backdrop-filter 会让这一块自成层叠上下文，于是整个搜索框（连同里面的下拉菜单）
+     会被后面 .site 的定位层盖住。显式抬到它们上面。 */
+  z-index: 5;
+  display: flex; align-items: center; gap: 4px;
+  width: min(640px, 84vw); height: 52px; padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.44);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.home-search:focus-within { border-color: rgba(255, 255, 255, 0.45); background: rgba(8, 12, 22, 0.62); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42); }
+.hs-engine, .hs-go { pointer-events: auto; flex: none; display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; color: rgba(255, 255, 255, 0.7); border-radius: 50%; transition: background 0.16s, color 0.16s; }
+.hs-engine { width: 38px; height: 38px; margin-left: 3px; font-size: 15px; font-weight: 700; color: #fff; }
+.hs-engine .mark { width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; letter-spacing: -0.02em; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.hs-engine:hover .mark { filter: brightness(1.15); }
+.hs-go { width: 38px; height: 38px; margin-right: 3px; }
+.hs-go:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.hs-go svg { width: 18px; height: 18px; }
+#homeQuery {
+  pointer-events: auto; flex: 1 1 auto; min-width: 0; height: 100%;
+  border: 0; background: transparent; outline: none;
+  color: var(--text); font: inherit; font-size: 15px; letter-spacing: 0.01em;
+}
+#homeQuery::placeholder { color: rgba(255, 255, 255, 0.42); }
+
+/* 引擎下拉：点左下角那个小图标出来 */
+.hs-menu {
+  position: absolute; top: calc(100% + 8px); left: 6px; z-index: 3;
+  display: flex; flex-direction: column; min-width: 148px; padding: 5px;
+  border-radius: 14px; border: 1px solid var(--stroke);
+  background: var(--glass-strong, rgba(10, 14, 26, 0.9));
+  box-shadow: var(--shadow); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+.hs-menu[hidden] { display: none; }
+.hs-menu button { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.hs-menu button:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.hs-menu button.on { color: #fff; }
+.hs-menu button.on::after { content: "✓"; margin-left: auto; color: var(--accent); font-size: 12px; }
+.hs-menu .mark { width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+
+/* ---------- 快捷网址 ---------- */
+.home-sites {
+  pointer-events: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, 88px); justify-content: center;
+  gap: clamp(8px, 1.5vh, 18px) 10px;
+  width: min(920px, 92vw);
+  max-height: min(44vh, 400px);
+  overflow-y: auto; overflow-x: hidden;
+  padding: 6px 10px 12px;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  scroll-behavior: smooth;
+}
+.home-sites::-webkit-scrollbar { width: 8px; }
+.home-sites::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 99px; }
+.home-sites::-webkit-scrollbar-track { background: transparent; }
+
+.site {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 7px 2px 5px; border-radius: 15px;
+  color: #fff; text-decoration: none; cursor: pointer;
+  transition: transform 0.16s ease, background 0.16s;
+}
+.site:hover { background: rgba(255, 255, 255, 0.09); transform: translateY(-2px); }
+.site.dragging { opacity: 0.35; transform: none; }
+.site.drop-in { background: rgba(255, 255, 255, 0.06); }
+
+.s-ico {
+  width: 58px; height: 58px; border-radius: 17px; overflow: hidden;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: box-shadow 0.16s;
+}
+.site:hover .s-ico { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42); }
+.s-ico img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.s-ico .s-letter { font-size: 23px; font-weight: 700; letter-spacing: 0.01em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.s-ico .s-emoji { font-size: 28px; line-height: 1; }
+
+.s-name {
+  max-width: 100%; font-size: 12px; line-height: 1.3; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7), 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* 悬浮才出来的编辑 / 删除 */
+.s-tools { position: absolute; top: 1px; right: 1px; display: flex; gap: 3px; opacity: 0; transform: translateY(-4px); transition: opacity 0.16s, transform 0.16s; }
+.site:hover .s-tools, .site:focus-within .s-tools { opacity: 1; transform: none; }
+.s-tools button {
+  width: 21px; height: 21px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.24); background: rgba(10, 14, 26, 0.86); color: rgba(255, 255, 255, 0.82);
+  display: grid; place-items: center; font-size: 11px; line-height: 1;
+  transition: background 0.16s, color 0.16s;
+}
+.s-tools button:hover { background: #fff; color: #10141f; border-color: #fff; }
+.s-tools button.del:hover { background: var(--danger); color: #fff; border-color: transparent; }
+.s-tools svg { width: 11px; height: 11px; }
+
+.site-add .s-ico { background: rgba(255, 255, 255, 0.05); border-style: dashed; border-color: rgba(255, 255, 255, 0.3); box-shadow: none; }
+.site-add:hover .s-ico { background: rgba(255, 255, 255, 0.13); }
+.site-add .s-ico svg { width: 22px; height: 22px; color: rgba(255, 255, 255, 0.72); }
+.site-add .s-name { color: rgba(255, 255, 255, 0.55); }
+.site-empty { grid-column: 1 / -1; padding: 22px 0 26px; text-align: center; font-size: 13px; color: rgba(255, 255, 255, 0.5); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
+
+/* ---------- 右上角的树叶：一键收起 / 展开 ---------- */
+#homeLeaf {
+  position: fixed; top: 16px; right: 18px; z-index: 2;
+  pointer-events: auto; width: 40px; height: 40px; padding: 0;
+  display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: transparent; color: rgba(255, 255, 255, 0.75); cursor: pointer;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.55));
+  transition: color 0.2s, background 0.2s, opacity 0.3s, transform 0.35s;
+}
+#homeLeaf svg { width: 22px; height: 22px; }
+#homeLeaf:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
+#homeLeaf:active { transform: scale(0.92); }
+/* 收起来之后叶子自己留着（不然没法再点出来），只是淡下去让画面干净 */
+html.home-off #homeLeaf { opacity: 0.3; }
+html.home-off #homeLeaf:hover { opacity: 1; transform: rotate(-14deg); }
+
+/* ---------- 删除后的撤销条（浮在底部控制条上方） ---------- */
+/* 这一条不在 #home 里（见 home.html 的说明），所以它自己管显示条件 */
+html:not(.home) .home-undo, html.home-off .home-undo { display: none; }
+.home-undo {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + var(--npbar-h, 48px) + 14px); z-index: 14;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 9px 8px 16px;
+  border: 1px solid var(--stroke); border-radius: 999px;
+  background: var(--glass-strong, rgba(10, 14, 26, 0.88));
+  box-shadow: var(--shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  font-size: 13px; color: var(--muted); white-space: nowrap;
+  animation: undo-in 0.24s ease;
+}
+.home-undo button { padding: 5px 13px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: #1a1206; background: linear-gradient(135deg, #ffd27a, #ffab5e); }
+.home-undo button:hover { filter: brightness(1.06); }
+@keyframes undo-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+/* ---------- 添加 / 编辑弹窗 ---------- */
+.home-dialog {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(5, 8, 16, 0.55); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  pointer-events: auto;
+}
+.home-dialog[hidden] { display: none; }
+.hd-card {
+  width: min(360px, 100%); padding: 20px 20px 16px;
+  border: 1px solid var(--stroke); border-radius: var(--radius, 16px);
+  background: var(--glass-strong, rgba(12, 16, 28, 0.94)); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 12px;
+  animation: hd-in 0.2s ease;
+}
+@keyframes hd-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.hd-card h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+.hd-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.hd-card input {
+  height: 38px; padding: 0 11px; font: inherit; font-size: 13.5px; color: var(--text);
+  background: rgba(255, 255, 255, 0.07); border: 1px solid var(--stroke); border-radius: 10px; outline: none;
+  transition: border-color 0.16s, background 0.16s;
+}
+.hd-card input:focus { border-color: rgba(255, 255, 255, 0.42); background: rgba(255, 255, 255, 0.11); }
+.hd-card input::placeholder { color: rgba(255, 255, 255, 0.32); }
+.hd-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.hd-acts button { padding: 8px 16px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--stroke); background: rgba(255, 255, 255, 0.06); color: var(--muted); transition: all 0.15s; }
+.hd-acts button:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
+.hd-acts button.primary { border-color: transparent; background: linear-gradient(135deg, #ffd27a, #ffab5e); color: #1a1206; font-weight: 700; }
+.hd-acts button.primary:hover { filter: brightness(1.06); }
+.hd-tip { margin: 0; font-size: 11.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.42); }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 760px) {
+  .home-main { padding: 4.5vh 16px 92px; gap: 14px; }
+  .home-sites { grid-template-columns: repeat(auto-fill, 76px); gap: 8px; width: 96vw; max-height: 40vh; }
+  .s-ico { width: 50px; height: 50px; border-radius: 15px; }
+  .s-ico .s-letter { font-size: 20px; }
+  .s-name { font-size: 11px; }
+  .home-search { height: 46px; width: 90vw; }
+  #homeLeaf { top: 10px; right: 10px; }
+}
+@media (max-height: 620px) {
+  .hc-time { font-size: clamp(38px, 8vw, 72px); }
+  .home-sites { max-height: 34vh; }
+}

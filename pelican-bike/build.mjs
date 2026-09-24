@@ -31,9 +31,20 @@ const WPC = `{
   dayrate: 0.025   // 时间流速（时/秒），仅 flow 打开时有效：0.025 ≈ 16 分钟过完一天
 }`;
 
-// 插件版比壁纸版多一个 ui 开关（底部控制条），由下面单独追加，这样壁纸版不会跟着长出一条控件栏。
+// 插件版比壁纸版多两样东西（底部控制条 + 桌面层），都由下面单独追加，
+// 这样壁纸版不会跟着长出一条控件栏，也不会多出时钟和图标格子。
 const npUiConfig = `/* 底部控制条：true = 可以拖速度、切时段、做动作、换镜头、开关声音；false = 纯画面（等同桌面壁纸） */
-window.__PELICAN_WP.ui = true;`;
+window.__PELICAN_WP.ui = true;
+/* 桌面层：时钟 + 农历、搜索框、快捷网址（右上角树叶可一键收起）。false = 只剩画面 */
+window.__PELICAN_WP.home = true;`;
+
+// 桌面层的三个文件都住在 extension/ 里，只有插件产物会复制过去
+const EXT_HOME_FILES = ['home.css', 'home.js', 'home-boot.js'];
+const extHomeHtml = readFileSync('extension/home.html', 'utf8');
+// home-boot.js 要在 head 里同步跑（先于首帧挂 .home / .home-off），否则每开一次新标签页都会闪一下
+const extHomeHead = `<!-- 桌面层：结构见 build.mjs 注入的片段，样式在 home.css，逻辑在 home.js（另见 home-boot.js） -->
+<link rel="stylesheet" href="home.css" />
+<script src="home-boot.js"></script>`;
 
 const tpl = readFileSync('index.template.html', 'utf8');
 const og = process.env.OG_IMAGE ? `<meta property="og:image" content="${process.env.OG_IMAGE}" />` : '';
@@ -82,7 +93,9 @@ const newtab = render(
   '<script src="config.js"></script>',
   '新标签页 · 鹈鹕骑单车',
   '<script src="app.js"></script>',
-);
+)
+  .replace('</head>', () => `${extHomeHead}\n</head>`)
+  .replace('<script src="app.js"></script>', () => `${extHomeHtml}\n<script src="app.js"></script>`);
 writeFileSync(`${extDir}/newtab.html`, newtab);
 
 // manifest.json 与图标是静态资源，直接从 extension/ 复制
@@ -92,9 +105,12 @@ copyFileSync('extension/manifest.json', `${extDir}/manifest.json`);
 for (const file of iconFiles) {
   if (existsSync(`extension/${file}`)) copyFileSync(`extension/${file}`, `${extDir}/${file}`);
 }
+for (const file of EXT_HOME_FILES) {
+  if (existsSync(`extension/${file}`)) copyFileSync(`extension/${file}`, `${extDir}/${file}`);
+}
 
-const extFiles = ['manifest.json', 'newtab.html', 'app.js', 'config.js', ...iconFiles].filter((f) =>
-  existsSync(`${extDir}/${f}`),
+const extFiles = ['manifest.json', 'newtab.html', 'app.js', 'config.js', ...EXT_HOME_FILES, ...iconFiles].filter(
+  (f) => existsSync(`${extDir}/${f}`),
 );
 const extSize = extFiles.reduce((sum, f) => sum + readFileSync(`${extDir}/${f}`).length, 0);
 

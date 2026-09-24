@@ -1,0 +1,57 @@
+<!-- ===== 新标签页的桌面层：时钟 + 农历 / 搜索框 / 快捷网址 =====
+     这一段只属于插件产物：build.mjs 会把它注入 newtab.html，并复制 home.css、home.js、home-boot.js。
+     游戏版（index.html）和桌面壁纸版（wallpaper.html）里没有它，那两边的输入屏蔽逻辑一点没动。
+     开关在 config.js：window.__PELICAN_WP.home，设成 false 就只剩画面。
+     数据（网址、搜索引擎、收起状态）都放在扩展自己的 localStorage 里，一个网络请求都不发。 -->
+<div id="home">
+  <button id="homeLeaf" type="button" aria-pressed="false" title="收起 / 展开「时间 · 搜索 · 快捷网址」（快捷键 L）">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20.9 3.1c.6 9.3-5.6 15.5-14.6 15.5-1 0-2-.1-2.9-.4C4.1 9.6 10.7 3.9 20.9 3.1Z" fill="currentColor" />
+      <path d="M3.5 18.4C7.6 12.4 13.3 7.6 19.8 5.2" stroke="rgba(0,0,0,0.34)" stroke-width="1.2" fill="none" stroke-linecap="round" />
+    </svg>
+  </button>
+
+  <div class="home-main">
+    <div class="home-clock">
+      <div class="hc-time" id="homeTime">--:--</div>
+      <div class="hc-date"><span id="homeDate"></span></div>
+    </div>
+
+    <form class="home-search" id="homeSearch" autocomplete="off">
+      <button class="hs-engine" id="homeEngine" type="button" title="切换搜索引擎" aria-haspopup="true" aria-expanded="false"></button>
+      <input id="homeQuery" type="text" placeholder="搜索或输入网址" spellcheck="false" autocomplete="off" />
+      <button class="hs-go" type="submit" title="搜索 / 打开">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.4" stroke="currentColor" stroke-width="1.9" />
+          <path d="M15.9 15.9 20.4 20.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+        </svg>
+      </button>
+      <div class="hs-menu" id="homeEngineMenu" hidden></div>
+    </form>
+
+    <div class="home-sites" id="homeSites"></div>
+  </div>
+</div>
+
+<!-- 删掉快捷网址之后留 8 秒反悔时间。故意放在 #home 外面：底部控制条有它自己的层叠层级，
+     待在里面的话无论 z-index 写多大都会被压在下面点不着。 -->
+<div class="home-undo" id="homeUndo" hidden>
+  <span class="uo-text"></span>
+  <button type="button" id="homeUndoBtn">撤销</button>
+</div>
+
+<!-- 添加 / 编辑快捷网址 -->
+<div class="home-dialog" id="homeDialog" hidden>
+  <form class="hd-card" id="homeForm">
+    <h3 id="hdTitle">添加快捷网址</h3>
+    <label>名称<input id="hdName" maxlength="24" placeholder="例如 知乎" /></label>
+    <label>网址<input id="hdUrl" placeholder="zhihu.com 或 https://…" /></label>
+    <label>图标（可选）<input id="hdIcon" placeholder="emoji 或图片链接" /></label>
+    <p class="hd-tip">图标留空会自动读该网站的 favicon，读不到就用名称首字拼一个色块。</p>
+    <div class="hd-acts">
+      <button type="button" id="hdCancel">取消</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</div>
+<script src="home.js"></script>
