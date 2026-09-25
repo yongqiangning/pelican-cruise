@@ -107,7 +107,6 @@ export class AudioEngine {
     pan.pan.value = -0.6;
     this.surf.connect(surfF).connect(this.surfGain).connect(pan).connect(this.envBus);
 
-    this.nextTick = 0;
     this.enabled = true;
     // 音乐调度
     this.step = 0;
@@ -279,11 +278,7 @@ export class AudioEngine {
     this.windFilter.frequency.setTargetAtTime(220 + v * 55, t, 0.25);
     this.rollGain.gain.setTargetAtTime(p.airborne ? 0 : Math.min(0.22, v * 0.02), t, 0.05);
     this.rollFilter.frequency.setTargetAtTime(150 + v * 18, t, 0.25);
-    // 滑行时的飞轮棘轮声
-    if (!p.pedaling && v > 0.5 && t > this.nextTick) {
-      this.click(t, 0.03);
-      this.nextTick = t + Math.max(0.012, 0.35 / v);
-    }
+    // 背景层只用风声、海浪声和胎噪；链条 / 飞轮棘轮那类机械拟音一律不放
     // 海鸥只是偶尔远远叫一声，别太吵
     if (t > this.nextGull) {
       this.gull(t);

@@ -671,8 +671,8 @@ function updateRide(dt) {
     });
     const curCad = wheelRpm / (GEARS[S.gear][0] / GEARS[S.gear][1]);
     if (best !== S.gear && (curCad > 102 || curCad < 68)) {
+      // 换档不再配「咔哒」的链条声：背景层只留风声与海浪声
       S.gear += Math.sign(best - S.gear);
-      audio.enabled && audio.click(audio.ctx.currentTime, 0.18);
     }
   }
   const ratio = GEARS[S.gear][0] / GEARS[S.gear][1];
