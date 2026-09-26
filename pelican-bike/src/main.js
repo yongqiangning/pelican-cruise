@@ -27,11 +27,12 @@ const $ = (s) => document.querySelector(s);
 const WPC = window.__PELICAN_WP || {};
 const WP = qp('wp', WPC.enabled ? '1' : '0') === '1';
 if (WP) document.documentElement.classList.add('wp');
-// 新标签页插件的控制条：WPC.ui = true 全开，也可以给个对象按项开关
-// （speed 速度滑块 / tod 时段 / acts 动作 / cams 镜头 / sound 声音）。
+// 新标签页插件的控制条：WPC.ui = true 全开；给对象则按项裁剪，没写的项默认开
+// （speed 速度滑块 / tod 时段 / keys 快捷键按钮 / acts 动作 / cams 镜头 / sound 声音）。
 // 桌面壁纸版不带控制条 —— 桌面上那个窗口连鼠标都不属于它，控件没意义，也挡图标。
 const uiCfg = WPC.ui ?? (qp('ui', '0') === '1');
-const NP = WP && uiCfg ? (uiCfg === true ? { speed: true, tod: true, acts: true, cams: true, sound: true } : uiCfg) : null;
+const UI_ALL = { speed: true, tod: true, keys: true, acts: true, cams: true, sound: true };
+const NP = WP && uiCfg ? { ...UI_ALL, ...(uiCfg === true ? {} : uiCfg) } : null;
 if (NP) document.documentElement.classList.add('wpui');
 // >0 表示锁帧（壁纸模式默认 30，省电、也不至于看着卡）
 const WP_FPS = WP ? +qp('maxfps', WPC.fps || 30) : 0;
@@ -1192,9 +1193,65 @@ if (NP) {
     });
     syncEnv();
   }
+  // 快捷键一览：鼠标悬浮出来、点一下钉住。浮窗不在按钮里（见 index.template.html 的说明），
+  // 所以不能靠 CSS :hover 相邻判断——移开时给 180ms 宽限，够鼠标从按钮挪到浮窗上。
+  // 宽限到点后重新判一次「鼠标还在不在」，而不是靠 enter 去 clearTimeout：
+  // 同一次 mousemove 里 leave(按钮) 和 enter(浮窗) 谁先谁后由浏览器定，靠时序会翻车。
+  const keysBtn = $('#npKeys');
+  const keysTip = $('#npKeysTip');
+  if (NP.keys && keysBtn && keysTip) {
+    let hideTimer = 0;
+    let pinned = false;
+    const hovering = () => keysBtn.matches(':hover') || keysTip.matches(':hover');
+    const paint = (open) => {
+      keysTip.classList.toggle('show', open);
+      keysBtn.setAttribute('aria-expanded', String(open));
+    };
+    const sync = () => paint(pinned || hovering());
+    const openKeys = () => {
+      clearTimeout(hideTimer);
+      sync();
+    };
+    const closeKeys = () => {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(sync, 180);
+    };
+    // 手动关掉：忽略「鼠标还停在上面」（点一下收起来、按 Esc 收起来，都要真的收掉）
+    const forceClose = () => {
+      clearTimeout(hideTimer);
+      paint(false);
+    };
+    keysBtn.addEventListener('mouseenter', openKeys);
+    keysBtn.addEventListener('mouseleave', closeKeys);
+    keysBtn.addEventListener('focus', openKeys);
+    keysBtn.addEventListener('blur', closeKeys);
+    keysTip.addEventListener('mouseenter', openKeys);
+    keysTip.addEventListener('mouseleave', closeKeys);
+    keysBtn.addEventListener('click', () => {
+      pinned = !pinned;
+      if (pinned) openKeys();
+      else forceClose();
+    });
+    // 钉住之后点别处就收起来，免得挡着画面又找不到关的地方
+    addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!pinned || keysTip.contains(e.target) || keysBtn.contains(e.target)) return;
+        pinned = false;
+        forceClose();
+      },
+      true,
+    );
+    addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !pinned) return;
+      pinned = false;
+      forceClose();
+      keysBtn.blur();
+    });
+  }
   // 配置里关掉的组直接藏起来（默认全开）
-  for (const [key, cls] of Object.entries({ speed: '.np-speed', tod: '.np-tod', acts: '.np-acts', cams: '.np-cams', sound: '.np-sound' })) {
-    if (!NP[key]) $(`#npbar ${cls}`)?.setAttribute('hidden', '');
+  for (const [key, cls] of Object.entries({ speed: '.np-speed', tod: '.np-tod', keys: '.np-keys, .np-keys-tip', acts: '.np-acts', cams: '.np-cams', sound: '.np-sound' })) {
+    if (!NP[key]) for (const sel of cls.split(', ')) $(`#npbar ${sel}`)?.setAttribute('hidden', '');
   }
 }
 
