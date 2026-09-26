@@ -210,6 +210,25 @@ html:not(.home) .home-undo, html.home-off .home-undo { display: none; }
 .hd-acts button.primary:hover { filter: brightness(1.06); }
 .hd-tip { margin: 0; font-size: 11.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.42); }
 
+/* 图标查找：左边预览小方框（和网格里的图标同一套观感），中间状态，右边重新查找 */
+.hd-find { display: flex; align-items: center; gap: 10px; }
+.hdf-preview {
+  flex: none; width: 42px; height: 42px; border-radius: 12px; overflow: hidden;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.13); border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 17px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.hdf-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hdf-text { flex: 1 1 auto; min-width: 0; font-size: 11.5px; line-height: 1.45; color: rgba(255, 255, 255, 0.5); }
+.hdf-text.ok { color: #9fe1cb; }
+.hdf-text.warn { color: #fac775; }
+.hd-find button {
+  flex: none; padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--stroke); background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.72);
+  font: inherit; font-size: 11.5px; white-space: nowrap; transition: background 0.15s, color 0.15s;
+}
+.hd-find button:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
 /* ---------- 窄屏 ---------- */
 @media (max-width: 760px) {
   .home-main { padding: 4.5vh 16px 92px; gap: 14px; }

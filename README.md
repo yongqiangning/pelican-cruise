@@ -80,7 +80,9 @@
 | 控制条快捷键浮窗 | 控制条「晚上」右边新增 <kbd>⌨</kbd> **快捷键** 按钮：鼠标悬浮浮出 17 条快捷键表（<kbd>U</kbd> 显示 / 隐藏菜单排第一条），点一下钉住、<kbd>Esc</kbd> 或点面板外收起。浮窗挂在控制条而非按钮上——按钮会跟着 `flex-wrap` 换行，粘在按钮上的浮窗在窄窗口下会从左边溢出屏幕；窗口很矮时列表自动变可滚动。顺带把 `ui` 对象写法改成与默认值合并，于是 `{ keys: false }` 只藏这一个按钮 | `main.js` `index.template.html` `EXTENSION.md` |
 | 构建自动压 zip | 每次构建顺手把 `dist/extension/` 压成 `pelican-newtab-extension.zip`，不再需要手工打包（纯 Node 手写，不调系统 `zip` 命令，Windows 也能构建；时间戳写死，产物可复现） | `build.mjs` |
 | 插件图标与标签页 favicon 统一 | 插件原先另有一套深色底的 PNG 图标，和标签页上那只（透明底、青蓝车轮、米白身体）不是同一个；现把模板里内联的 favicon SVG 抽成 `extension/icon.svg` 作为单一来源，由它渲出 16/32/48/128 四张透明 PNG 替换旧图。构建时顺带比对模板 favicon 与 `icon.svg`，只改一边会打印提醒 | `extension/icon.svg` `extension/icon*.png` `tools/render-icons.mjs` `build.mjs` |
-| 快捷网址图标变清晰 | 桌面层图标原先只去站点根路径取 `/favicon.ico`，多数站点的 favicon 只有 16–32px，放到约 64px 的图标位就被放大糊掉；现在按「手动设置的 icon → 默认站点自带的高清图 → `apple-touch-icon.png` → `apple-touch-icon-precomposed.png` → favicon.ico → 首字色块」逐级探测（纯 `<img>` 依次尝试，不加任何主机权限），老用户已有数据按 URL 只补缺、不动其它 | `extension/home.js` |
+| 快捷网址图标自动找最清晰的那张 | 原先只去站点根路径取 `/favicon.ico`，多数站点只有 16–32px，放到约 64px 的图标位就糊；且「谁先加载成功用谁」，于是 32px 的 `favicon.ico` 会抢在 180px 的 `apple-touch-icon` 前面。现改成四级：手动填的图标 → 记录里的高清地址（百度 1024²/B站 512²/知乎 152²/小红书 180²/淘宝 114²/GitHub 120²/DeepSeek 180²…）→ 按域名的本地缓存 → 猜根目录十几条常见路径，**并排加载后比像素取最大**。都没到 180px 时可在弹窗里点「查找高清图标」授权一次，插件读该站首页 HTML、PWA manifest 与 `msapplication-TileImage` 取它自己声明的地址（DeepSeek 的图标只在 CDN 上，只有这条路能拿到）。添加/编辑弹窗带预览小方框与状态行，改网址实时重算 | `extension/home.js` `home.html` `home.css` |
+| 修「编辑即丢图标」缺陷 | 保存时原本是**重建记录**（`{ name, url }` ＋可选图标），未在表单里暴露的内部高清地址字段被静默丢掉——编辑一次 DeepSeek、什么都不改，图标就掉成首字色块「D」。现在改为在旧记录上合并字段，并把本次解析结果钉进记录；换了站点则丢弃旧地址 | `extension/home.js` |
+| 权限改为可选（安装时零权限） | 新增 `optional_host_permissions: ["<all_urls>"]`：安装时不弹任何权限警告，只有用户点「查找高清图标」的那一刻才申请读取网页；不授权则跳过那一级，其余功能照常 | `extension/manifest.json` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文
@@ -136,7 +138,7 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 
 - **时钟**：正上方大字号，下面一行「9月25日 星期五 八月十五」，农历用浏览器内置的中国历法算，不自己维护月相表
 - **搜索框**：输入关键词去搜，输入网址（`github.com`、`localhost:3000`）直接打开；左侧小图标可切必应 / 百度 / Google / 搜狗 / 知乎 / B 站；按 <kbd>/</kbd> 直接聚焦
-- **快捷网址**：预置 12 个常用站点，可增删改、拖拽排序，删错有 8 秒撤销；图标自动去站点取 favicon，取不到就退成名称首字的彩色方块
+- **快捷网址**：预置 12 个常用站点，可增删改、拖拽排序，删错有 8 秒撤销；图标自动挑**最清晰的那张**（预置高清地址 → 本地缓存 → 猜测站点根目录十几条常见路径，并排加载后比像素取最大），实在没有就退成名称首字的彩色方块。想要更清晰，在弹窗里点「查找高清图标」授权一次，插件会读那个网页、用它自己声明的图标地址（DeepSeek 这类图标只放在 CDN 上的站点只能靠这一步）
 - **右上角一片树叶**：点一下把这一层全收起来、只留画面，再点一下放回来——状态会记住，快捷键 <kbd>L</kbd>
 
 还有**一条底部控制条**，所以新标签页不只是看着，也能上手：
@@ -151,7 +153,7 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 
 > 完整的**参数面板**（巡航速度、自动变速、日期时间、画质、音乐与环境音各项音量）在**游戏页**里——点右上角工具条上的 <kbd>⚙️</kbd> 打开。壁纸版与新标签页把它刻意隐藏了（桌面上那个窗口连鼠标都不属于它），所以插件里调环境音音量就用控制条上那个「海浪」滑块。
 
-插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页；**不申请任何权限**（连 `storage` 都没要，数据存在扩展自己的 localStorage 里），约 848 KB（含 4 个尺寸图标），完全离线——唯一会联网的是你点开的网页，以及浏览器为快捷网址取一次站点自己的 `favicon.ico`（不经过第三方图标服务）。`dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装。
+插件本体是 `dist/extension/`，Manifest V3，用 `chrome_url_overrides.newtab` 接管新标签页；**安装时不申请任何权限**（连 `storage` 都没要，数据存在扩展自己的 localStorage 里），约 869 KB（含 4 个尺寸图标），完全离线——唯一会联网的是你点开的网页，以及为快捷网址取图标：浏览器按 `<img>` 去目标站点自己试几组常见图标路径（不经过第三方图标服务），或在你点「查找高清图标」并授权后读一次该站首页找它声明的图标（`optional_host_permissions`，装了不会弹警告，点了才申请，随时可取消）。`dist/pelican-newtab-extension.zip` 是它的压缩包，方便拷到别的机器再解压安装。
 
 时段 / 镜头 / 车速 / 画质 / 帧率同样写在一小段可直接编辑的配置里（`config.js`）：`window.__PELICAN_WP.ui` 管底部控制条，`window.__PELICAN_WP.home` 管时钟 / 搜索 / 快捷网址那一层，任意一个设成 `false` 就少一层，两个都关就是与桌面壁纸完全一致的纯画面；把 `enabled` 改成 `false` 则新标签页变成**可以玩**的完整游戏。
 

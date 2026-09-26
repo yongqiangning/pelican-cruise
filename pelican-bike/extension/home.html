@@ -46,8 +46,13 @@
     <h3 id="hdTitle">添加快捷网址</h3>
     <label>名称<input id="hdName" maxlength="24" placeholder="例如 知乎" /></label>
     <label>网址<input id="hdUrl" placeholder="zhihu.com 或 https://…" /></label>
-    <label>图标（可选）<input id="hdIcon" placeholder="emoji 或图片链接" /></label>
-    <p class="hd-tip">图标留空会自动读该网站的 favicon，读不到就用名称首字拼一个色块。</p>
+    <label>图标（可选）<input id="hdIcon" placeholder="留空自动查找；也可填 emoji 或图片链接" /></label>
+    <div class="hd-find">
+      <div class="hdf-preview" id="hdPreview" aria-hidden="true"></div>
+      <div class="hdf-text" id="hdFindStatus">填上网址后自动查找该站的清晰图标</div>
+      <button type="button" id="hdFindBtn">查找高清图标</button>
+    </div>
+    <p class="hd-tip">图标留空即自动查找：先试站点根目录下的 apple-touch-icon / PWA 图标 / favicon.svg，取像素最大的那张；点了「查找高清图标」并授权后，还会读一次该网页、用它自己声明的图标地址（通常最清晰）。都找不到才用名称首字拼色块。</p>
     <div class="hd-acts">
       <button type="button" id="hdCancel">取消</button>
       <button type="submit" class="primary">保存</button>
