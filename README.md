@@ -85,6 +85,7 @@
 | 权限改为可选（安装时零权限） | 新增 `optional_host_permissions: ["<all_urls>"]`：安装时不弹任何权限警告，只有用户点「查找高清图标」的那一刻才申请读取网页；不授权则跳过那一级，其余功能照常 | `extension/manifest.json` |
 | 图标不再套一圈白边 | 图标位（`.s-ico`）与弹窗预览框原先都带 `border: 1px solid rgba(255,255,255,.14)`，在深色画面里就是每个图标外面那圈白线；现去掉描边，圆角改由 `overflow: hidden` 裁，图标本身铺满整块（全局 `box-sizing: border-box`，尺寸不变）。「添加」按钮的虚线框是有意保留的占位提示，改成自带 `1px dashed` 不受影响 | `extension/home.css` |
 | 时钟字号调小 | 新标签页时钟原为 `clamp(50px, 9.2vw, 124px)`（1280 宽时长边 118px），把搜索框和快捷网址网格一路往下挤；现改为 `clamp(38px, 6.6vw, 90px)`（同时段/日期字号与间距同步收一点，矮窗口 `max-height: 620px` 那条也按同比例降到 `clamp(30px, 5.4vw, 58px)`）。实测 1280×800 下时钟 118→84px、网格首行上移 36px；1920×1080 下 124→90px | `extension/home.css` |
+| 修「鼠标指针在弹窗里消失」 | 壁纸模式为了干净用 `html.wp body { cursor: none }` 藏掉鼠标，而插件里「解禁」的那条只写在 `html` 上（`html.wp.wpui`）——视口是 body 铺满的，body 的计算值仍是 `none` 并继承给所有没显式声明光标的后代，于是只有按钮和链接（`pointer`）能露出光标，编辑弹窗的提示/状态文字、控制条标签这些纯文字区就成了「鼠标走过去就没了」。现改为 `:is(html.wp.wpui, html.home) body { cursor: default }`（`html` 自身那条一并保留），输入框单独 `cursor: auto`，否则打字时显示箭头而不是 I 形；关掉控制条只留桌面层同样生效，两者都关（纯画面）仍保持隐藏 | `index.template.html` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文

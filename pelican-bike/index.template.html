@@ -153,7 +153,15 @@ html.wp .bars::before, html.wp .bars::after { height: 0 !important; }
 /* ---------- 新标签页控制条（浏览器插件专用；壁纸版没有，控件在桌面上没意义） ---------- */
 .npbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(20px, env(safe-area-inset-bottom)); z-index: 12; display: none; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 16px; max-width: calc(100vw - 32px); padding: 9px 16px; background: var(--glass); border: 1px solid var(--stroke); border-radius: 20px; box-shadow: var(--shadow); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); }
 html.wpui .npbar { display: flex; }
-html.wp.wpui { cursor: default; }
+/* 有界面可交互时（插件控制条 wpui / 桌面层 home）就必须把鼠标放出来。
+   关键是**必须落在 body 上**：视口是 body 铺满的，而上面 `html.wp body { cursor: none }`
+   让 body 自己的计算值就是 none，再继承给每一个后代——只把 html 改成 default 完全没用，
+   屏幕上命中的都是 body 及其后代，于是只有显式写了 cursor 的按钮 / 链接（pointer）能露出光标，
+   纯文字区（编辑弹窗里的提示与状态文字、控制条的标签）就表现为「鼠标箭头走过去会消失」。
+   输入框单独给 auto，不然在里面打字时是箭头而不是 I 形。 */
+:is(html.wp.wpui, html.home) { cursor: default; }
+:is(html.wp.wpui, html.home) body { cursor: default; }
+:is(html.wp.wpui, html.home) :is(input, textarea, select) { cursor: auto; }
 html.wp.wpui #toasts { display: flex !important; }
 body.hide-ui .npbar { display: none !important; }
 .npbar .np-group { display: flex; align-items: center; gap: 6px; }
