@@ -33,8 +33,10 @@ const WPC = `{
 
 // 插件版比壁纸版多两样东西（底部控制条 + 桌面层），都由下面单独追加，
 // 这样壁纸版不会跟着长出一条控件栏，也不会多出时钟和图标格子。
-const npUiConfig = `/* 底部控制条：true = 可以拖速度、切时段、做动作、换镜头、开关声音；false = 纯画面（等同桌面壁纸）
-   也可以给对象按项裁剪（speed / tod / keys / acts / cams / sound），没写的项默认开，例如 { keys: false } 只藏快捷键按钮 */
+const npUiConfig = `/* 底部控制条：true = 可以拖速度、切时段、做动作、换镜头、开关声音、开关背景音乐；false = 纯画面（等同桌面壁纸）
+   也可以给对象按项裁剪（speed / tod / keys / acts / cams / sound / music），没写的项默认开，例如 { keys: false } 只藏快捷键按钮。
+   注：控制条上的背景音乐出厂是关的（新标签页一开就放音乐太打扰，先让人听环境音），
+   用户自己在控制条里开过一次之后，开关与音量记在 localStorage 里（pelican.music.*），下次开新标签页接着用 */
 window.__PELICAN_WP.ui = true;
 /* 桌面层：时钟 + 农历、搜索框、快捷网址（右上角树叶可一键收起）。false = 只剩画面 */
 window.__PELICAN_WP.home = true;`;

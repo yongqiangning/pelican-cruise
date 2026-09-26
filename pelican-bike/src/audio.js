@@ -228,13 +228,20 @@ export class AudioEngine {
   // ------- 自定义背景音乐：用户上传的本地音频 -------
   // 元素接进 WebAudio 总线，主音量 / 音乐音量 / 静音都能一起生效
   loadCustomMusic(files) {
-    if (!this.ctx) return false;
     const list = [...files].filter(
       (f) => (f.type || '').startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|wma)$/i.test(f.name || ''),
     );
     if (!list.length) return false;
+    return this.loadCustomTracks(list.map((f) => ({ name: f.name.replace(/\.[^.]+$/, ''), blob: f })));
+  }
+  // tracks: [{ name, blob }]。blob 既可以是刚选中的 File，也可以是从 IndexedDB 里
+  // 取回来的 Blob（插件要跨标签页记住用户的曲子），两者走同一条装载路径。
+  loadCustomTracks(tracks) {
+    if (!this.ctx) return false;
+    const list = (tracks || []).filter((t) => t && t.blob);
+    if (!list.length) return false;
     this.clearCustomMusic();
-    this.tracks = list.map((f) => ({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f) }));
+    this.tracks = list.map((t) => ({ name: String(t.name || '未命名'), url: URL.createObjectURL(t.blob) }));
     this.trackIdx = 0;
     const el = new Audio();
     el.preload = 'auto';

@@ -14,12 +14,31 @@ import { createPelican } from './pelican.js';
 import { fishGeometry } from './fish.js';
 import { Particles, Confetti, SpeedLines, Scarf } from './effects.js';
 import { AudioEngine } from './audio.js';
+import { loadTracks, saveTracks, clearTracks } from './music-store.js';
 import { clamp, lerp, damp, smoothstep, TAU, mulberry32 } from './util.js';
 
 const Q = new URLSearchParams(location.search);
 const qp = (k, d) => (Q.has(k) ? Q.get(k) : d);
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const $ = (s) => document.querySelector(s);
+
+// 插件的新标签页每次打开都是一次全新加载，内存里什么都留不下。背景音乐的开关、音量和
+// 「用自己的歌还是内置氛围乐」存在 localStorage 里，用户自己调过一次就按他的来。
+function lsGet(k, d) {
+  try {
+    const v = localStorage.getItem(`pelican.${k}`);
+    return v === null ? d : v;
+  } catch (e) {
+    return d;
+  }
+}
+function lsSet(k, v) {
+  try {
+    localStorage.setItem(`pelican.${k}`, String(v));
+  } catch (e) {
+    /* 无痕模式写不进去，忽略 */
+  }
+}
 
 // ---------------- 桌面壁纸模式 ----------------
 // wallpaper.html 会在 head 里注入 window.__PELICAN_WP（一行可改的默认配置），并提前给 <html> 加 .wp，
@@ -28,10 +47,10 @@ const WPC = window.__PELICAN_WP || {};
 const WP = qp('wp', WPC.enabled ? '1' : '0') === '1';
 if (WP) document.documentElement.classList.add('wp');
 // 新标签页插件的控制条：WPC.ui = true 全开；给对象则按项裁剪，没写的项默认开
-// （speed 速度滑块 / tod 时段 / keys 快捷键按钮 / acts 动作 / cams 镜头 / sound 声音）。
+// （speed 速度滑块 / tod 时段 / keys 快捷键按钮 / acts 动作 / cams 镜头 / sound 声音 / music 背景音乐）。
 // 桌面壁纸版不带控制条 —— 桌面上那个窗口连鼠标都不属于它，控件没意义，也挡图标。
 const uiCfg = WPC.ui ?? (qp('ui', '0') === '1');
-const UI_ALL = { speed: true, tod: true, keys: true, acts: true, cams: true, sound: true };
+const UI_ALL = { speed: true, tod: true, keys: true, acts: true, cams: true, sound: true, music: true };
 const NP = WP && uiCfg ? { ...UI_ALL, ...(uiCfg === true ? {} : uiCfg) } : null;
 if (NP) document.documentElement.classList.add('wpui');
 // >0 表示锁帧（壁纸模式默认 30，省电、也不至于看着卡）
@@ -262,9 +281,13 @@ const settings = {
   volume: 0.8,
   envVolume: +qp('env', 0.5),
   envOn: qp('envon', '1') === '1',
-  music: true,
-  musicVolume: 0.55,
-  musicCustom: false,
+  // 背景音乐（内置的生成式氛围乐 / 用户上传的曲子）与环境音是两件独立的事：
+  // 这里关掉只静音乐总线，海浪、风声、海鸥、鹈鹕叫、车铃都还在。
+  // 插件里出厂是「关」：新标签页一开就放音乐太打扰，先让人听环境音；
+  // 用户自己开过一次之后按 localStorage 记住（下次开新标签页自己接上）。
+  music: NP ? lsGet('music.on', '0') === '1' : true,
+  musicVolume: NP ? +lsGet('music.vol', 0.55) || 0.55 : 0.55,
+  musicCustom: false, // 有没有轮到自己上传的曲子，等 IndexedDB 读出来再定
   trackName: '未选择（用内置生成式音乐）',
   quality: qualityKey,
   showFps: qp('fps', '0') === '1',
@@ -1147,7 +1170,29 @@ document.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('clic
 // ---------------- 新标签页控制条（浏览器插件专用） ----------------
 // 时段 / 动作 / 镜头按钮用的就是 HUD 那一套 data-time / data-act / data-cam 标记，
 // 上面几行 querySelectorAll 已经把事件绑好了（高亮同步也是），这里只补速度滑块和声音开关。
+//
+// 声音在插件里分三层，各自独立，互不牵连：
+//   背景音乐（下面的「音乐」按钮）—— 内置氛围乐或用户上传的曲子，走音乐总线
+//   环境音（旁边的「海浪」滑块）—— 风声 + 海浪，走 envBus
+//   音效（「声音」总开关）—— 海鸥、鹈鹕大叫、车铃，走 sfx 总线
+// 关掉背景音乐，海浪照旧、海鸥照叫。
+let pendingTracks = []; // 从 IndexedDB 读回来的本地音乐；音频引擎还没起来时先在这儿等着
+let syncMusicUI = () => {}; // 上传 / 清除 / 开关之后刷新浮窗（网页版没有浮窗，留空）
+let closeMusicPanel = () => {}; // 打开快捷键浮窗时把音乐浮窗收起来，两个都不大，别叠在一起
+let npEnsureSound = () => {}; // 主音量关着时顺手打开（插件里「声音」默认是关的，见下）
 if (NP) {
+  // 「声音」总开关的状态（默认关：新标签页动不动就出声很烦）。放在这里有第二个用处——
+  // 主音量是 0 的时候，拖音乐滑块 / 上传曲子照样没声，「动了没反应」最迷惑，所以那边一动就先打开它。
+  let soundOn = false;
+  const setNpSound = (on) => {
+    soundOn = on;
+    if (on) ensureAudio();
+    audio.setVolume(on ? settings.volume : 0);
+    $('#npSound')?.classList.toggle('on', on);
+  };
+  npEnsureSound = () => {
+    if (!soundOn) setNpSound(true);
+  };
   const speed = $('#npSpeed');
   const speedVal = $('#npSpeedVal');
   if (speed && speedVal && NP.speed) {
@@ -1164,13 +1209,9 @@ if (NP) {
   // 声音默认关着：新标签页动不动就出声很烦，点一下才启动音频（顺便满足浏览器的自动播放策略）
   const snd = $('#npSound');
   if (snd && NP.sound) {
-    let soundOn = false;
     snd.addEventListener('click', () => {
-      soundOn = !soundOn;
-      if (soundOn) ensureAudio();
-      audio.setVolume(soundOn ? settings.volume : 0);
-      snd.classList.toggle('on', soundOn);
-      toast(soundOn ? '🔊' : '🔇', soundOn ? '声音：开' : '声音：关', NP ? '海浪与风声的大小拖旁边的「海浪」滑块' : '音乐、海浪风声可在参数面板 → 声音里细调');
+      setNpSound(!soundOn);
+      toast(soundOn ? '🔊' : '🔇', soundOn ? '声音：开' : '声音：关', '海浪与风声拖旁边的「海浪」滑块，背景音乐点右边「音乐」');
     });
   }
   // 海浪 / 风声音量：插件的参数面板是藏起来的（html.wp 下 #guiHost 不显示），
@@ -1210,6 +1251,7 @@ if (NP) {
     const sync = () => paint(pinned || hovering());
     const openKeys = () => {
       clearTimeout(hideTimer);
+      closeMusicPanel(); // 两个浮窗都往控制条上方弹，同时开就叠在一起了
       sync();
     };
     const closeKeys = () => {
@@ -1249,8 +1291,91 @@ if (NP) {
       keysBtn.blur();
     });
   }
+  // 背景音乐浮窗：内置氛围乐 / 用户上传的曲子都从这儿管。
+  // 插件里参数面板是藏起来的，所以这是新标签页里唯一能换音乐、上传自己歌的地方。
+  const musicBtn = $('#npMusicBtn');
+  const musicTip = $('#npMusicTip');
+  if (NP.music && musicBtn && musicTip) {
+    const el = {
+      on: $('#npMusicOn'),
+      vol: $('#npMusicVol'),
+      volVal: $('#npMusicVolVal'),
+      now: $('#npMusicNow'),
+      upload: $('#npMusicUpload'),
+      del: $('#npMusicDel'),
+      segBuilt: $('#npMusicSegBuilt'),
+      segMine: $('#npMusicSegMine'),
+    };
+    // 一律点击开合，不做 hover 打开：里面要放滑块和文件选择按钮，
+    // 鼠标往上一挪就收起的话根本没法操作（快捷键浮窗里全是静态文本，才敢用 hover）。
+    let open = false;
+    const paintOpen = (v) => {
+      open = v;
+      musicTip.classList.toggle('show', v);
+      musicBtn.setAttribute('aria-expanded', String(v));
+    };
+    musicBtn.addEventListener('click', () => {
+      paintOpen(!open);
+      if (open) ensureAudio(); // 打开浮窗顺手把音频启起来，省得拖了滑块还是没声
+    });
+    addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!open || musicTip.contains(e.target) || musicBtn.contains(e.target)) return;
+        paintOpen(false);
+      },
+      true,
+    );
+    addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && open) paintOpen(false);
+    });
+    closeMusicPanel = () => paintOpen(false);
+
+    // 滑块读的是「此刻响不响」：音乐关着就是 0，拖到非 0 自动开、拖回 0 就是静音。
+    // 拖到 0 时刻意不清掉 settings.musicVolume —— M 键重新打开时还得用它。
+    const paint = () => {
+      el.vol.value = String(settings.music ? settings.musicVolume : 0);
+      el.volVal.textContent = String(Math.round(+el.vol.value * 100));
+      el.on.textContent = settings.music ? '背景音乐 · 开' : '背景音乐 · 关';
+      el.on.classList.toggle('on', settings.music);
+      const has = audio.tracks.length > 0 || pendingTracks.length > 0;
+      const n = Math.max(audio.tracks.length, pendingTracks.length);
+      el.segMine.disabled = !has;
+      el.segBuilt.classList.toggle('on', !settings.musicCustom || !has);
+      el.segMine.classList.toggle('on', settings.musicCustom && has);
+      el.del.hidden = !has;
+      const name = audio.tracks.length ? audio.trackName : pendingTracks.length ? pendingTracks[0].name : '';
+      el.now.textContent = has
+        ? `本地音乐：${name}${n > 1 ? ` 等 ${n} 首` : ''}${settings.musicCustom ? '' : '（当前没在用）'}`
+        : '本地音乐：未上传，放的是内置氛围乐';
+    };
+    syncMusicUI = paint;
+    paint();
+
+    el.vol.addEventListener('input', () => {
+      if (+el.vol.value > 0) npEnsureSound(); // 主音量还关着的话，先打开，不然拖了也没声
+      ensureAudio();
+      const v = +el.vol.value;
+      if (v > 0) settings.musicVolume = v; // 0 只是静音，不吃掉上次的音量
+      settings.music = v > 0;
+      audio.setMusicVolume(settings.musicVolume);
+      audio.setMusic(settings.music);
+      lsSet('music.vol', settings.musicVolume);
+      lsSet('music.on', settings.music ? '1' : '0');
+      setMusicButton();
+      paint();
+    });
+    el.on.addEventListener('click', () => {
+      toggleMusic();
+      if (settings.music) npEnsureSound();
+    });
+    el.upload.addEventListener('click', () => openMusicPicker());
+    el.del.addEventListener('click', () => clearCustomMusic());
+    el.segBuilt.addEventListener('click', () => useCustomMusic(false));
+    el.segMine.addEventListener('click', () => useCustomMusic(true));
+  }
   // 配置里关掉的组直接藏起来（默认全开）
-  for (const [key, cls] of Object.entries({ speed: '.np-speed', tod: '.np-tod', keys: '.np-keys, .np-keys-tip', acts: '.np-acts', cams: '.np-cams', sound: '.np-sound' })) {
+  for (const [key, cls] of Object.entries({ speed: '.np-speed', tod: '.np-tod', keys: '.np-keys, .np-keys-tip', acts: '.np-acts', cams: '.np-cams', sound: '.np-sound', music: '.np-music, .np-music-tip' })) {
     if (!NP[key]) for (const sel of cls.split(', ')) $(`#npbar ${sel}`)?.setAttribute('hidden', '');
   }
 }
@@ -1264,6 +1389,35 @@ function ensureAudio() {
     audio.setMusic(settings.music);
     audio.setMusicVolume(settings.musicVolume);
   }
+  applyPendingTracks();
+}
+// 把从 IndexedDB 读回来的本地音乐装进音频引擎。
+// 必须在 audio.ctx 起来之后（loadCustomTracks 要接 MediaElementSource），
+// 而音频又要等用户手势才能启动，所以这两件事只能在这里碰头。
+function applyPendingTracks() {
+  if (!NP || !audio.ctx || !pendingTracks.length || audio.tracks.length) return;
+  audio.loadCustomTracks(pendingTracks);
+  const tracks = pendingTracks;
+  pendingTracks = [];
+  settings.trackName = tracks[0]?.name || '';
+  // 恢复成用户上次的选择：用我的歌还是内置氛围乐（开关本身在 settings.music 里）
+  audio.setCustomOn(settings.musicCustom);
+  audio.setMusicVolume(settings.musicVolume);
+  audio.setMusic(settings.music);
+  syncMusicUI();
+}
+// 插件专用：新标签页每次打开都是全新加载，用户的曲子从 IndexedDB 里取回来。
+// 取回来不等于自动播：音乐的总开关默认是关的（见 settings.music），
+// 用户想听就拖一下音量滑块，或者点浮窗里的「背景音乐」。
+if (NP) {
+  loadTracks().then((tracks) => {
+    if (!tracks.length) return;
+    pendingTracks = tracks;
+    settings.trackName = tracks[0].name;
+    settings.musicCustom = lsGet('music.custom', '0') === '1';
+    applyPendingTracks();
+    syncMusicUI();
+  });
 }
 addEventListener('pointerdown', () => {
   const st = audio.ctx?.state;
@@ -1279,6 +1433,8 @@ function toggleMusic() {
   audio.setMusic(settings.music);
   audio.setMusicVolume(settings.musicVolume);
   setMusicButton();
+  if (NP) lsSet('music.on', settings.music ? '1' : '0');
+  syncMusicUI();
 }
 document.addEventListener('visibilitychange', () => audio.mute(document.hidden || S.paused));
 
@@ -1296,16 +1452,19 @@ function toggleEnv() {
 setEnvButton();
 
 // ---------------- 自定义背景音乐（用户上传 MP3） ----------------
+// 这是「背景音乐」那一路，和上面海浪 / 风声（envBus）、以及海鸥车铃（sfx）互不相干：
+// 换上自己的歌或者关掉音乐，环境音和音效照旧。
 const musicInput = document.createElement('input');
 musicInput.type = 'file';
 musicInput.accept = 'audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac';
 musicInput.multiple = true;
 musicInput.style.display = 'none';
 document.body.appendChild(musicInput);
-musicInput.addEventListener('change', () => {
+musicInput.addEventListener('change', async () => {
   const files = [...musicInput.files];
   musicInput.value = '';
   if (!files.length) return;
+  npEnsureSound(); // 插件里「声音」默认关着，选完歌主音量还是 0 就等于没反应
   ensureAudio(); // 静音进入也能用：这里一定处于用户手势里
   if (!audio.loadCustomMusic(files)) {
     toast('🎧', '这个文件读不了', '换一个 MP3 / M4A / WAV 试试');
@@ -1313,12 +1472,24 @@ musicInput.addEventListener('change', () => {
   }
   settings.musicCustom = true;
   settings.music = true;
+  // 音量被拖到过 0（比如插件里出厂就是关的），上传完给个默认，否则选完歌还是没声
+  if (!(settings.musicVolume > 0.02)) settings.musicVolume = 0.55;
   settings.trackName = audio.trackName || files[0].name;
   audio.setVolume(settings.volume);
   audio.setMusicVolume(settings.musicVolume);
   audio.setMusic(true);
   setMusicButton();
-  toast('🎧', '已经换成你的音乐', `${files.length} 首，循环播放`);
+  if (!NP) {
+    toast('🎧', '已经换成你的音乐', `${files.length} 首，循环播放`);
+    return;
+  }
+  lsSet('music.on', '1');
+  lsSet('music.vol', settings.musicVolume);
+  lsSet('music.custom', '1');
+  const saved = await saveTracks(files.map((f) => ({ name: f.name.replace(/\.[^.]+$/, ''), blob: f })));
+  pendingTracks = [];
+  syncMusicUI();
+  toast('🎧', '背景音乐已换成你的', saved ? `${files.length} 首，循环播放，下次开新标签页还在` : `${files.length} 首，循环播放（存不进本地，仅这次有效）`);
 });
 function openMusicPicker() {
   ensureAudio();
@@ -1326,13 +1497,26 @@ function openMusicPicker() {
 }
 function useCustomMusic(on) {
   ensureAudio();
-  audio.setCustomOn(on);
-  settings.musicCustom = on;
+  applyPendingTracks(); // 音频刚起来时曲子还没装进去，先补上再切
+  const has = audio.tracks.length > 0;
+  settings.musicCustom = !!on && has;
+  audio.setCustomOn(settings.musicCustom);
+  // 切到自己的歌时音乐若还关着，顺手打开——点这个按钮就是想听它
+  if (settings.musicCustom && !settings.music) toggleMusic();
+  if (NP) lsSet('music.custom', settings.musicCustom ? '1' : '0');
+  syncMusicUI();
 }
-function clearCustomMusic() {
+async function clearCustomMusic() {
   audio.clearCustomMusic();
   settings.musicCustom = false;
   settings.trackName = '未选择（用内置生成式音乐）';
+  pendingTracks = [];
+  if (NP) {
+    lsSet('music.custom', '0');
+    await clearTracks();
+  }
+  syncMusicUI();
+  toast('🎧', '已删除本地音乐', '回到内置氛围乐');
 }
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
@@ -1414,11 +1598,16 @@ f5.add(settings, 'envOn').name('海浪与风声').listen().onChange((v) => {
 f5.add(settings, 'music').name('音乐开关').listen().onChange((v) => {
   ensureAudio();
   audio.setMusic(v);
+  audio.setMusicVolume(settings.musicVolume);
   setMusicButton();
+  if (NP) lsSet('music.on', v ? '1' : '0');
+  syncMusicUI();
 });
 f5.add(settings, 'musicVolume', 0, 1, 0.01).name('音乐音量').onChange((v) => {
   ensureAudio();
   audio.setMusicVolume(v);
+  if (NP) lsSet('music.vol', v);
+  syncMusicUI();
 });
 f5.add(settings, 'musicCustom').name('使用自定义音乐').listen().onChange((v) => useCustomMusic(v));
 f5.add({ pick: openMusicPicker }, 'pick').name('上传背景音乐（MP3）');
