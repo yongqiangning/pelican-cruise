@@ -83,6 +83,7 @@
 | 快捷网址图标自动找最清晰的那张 | 原先只去站点根路径取 `/favicon.ico`，多数站点只有 16–32px，放到约 64px 的图标位就糊；且「谁先加载成功用谁」，于是 32px 的 `favicon.ico` 会抢在 180px 的 `apple-touch-icon` 前面。现改成四级：手动填的图标 → 记录里的高清地址（百度 1024²/B站 512²/知乎 152²/小红书 180²/淘宝 114²/GitHub 120²/DeepSeek 180²…）→ 按域名的本地缓存 → 猜根目录十几条常见路径，**并排加载后比像素取最大**。都没到 180px 时可在弹窗里点「查找高清图标」授权一次，插件读该站首页 HTML、PWA manifest 与 `msapplication-TileImage` 取它自己声明的地址（DeepSeek 的图标只在 CDN 上，只有这条路能拿到）。添加/编辑弹窗带预览小方框与状态行，改网址实时重算 | `extension/home.js` `home.html` `home.css` |
 | 修「编辑即丢图标」缺陷 | 保存时原本是**重建记录**（`{ name, url }` ＋可选图标），未在表单里暴露的内部高清地址字段被静默丢掉——编辑一次 DeepSeek、什么都不改，图标就掉成首字色块「D」。现在改为在旧记录上合并字段，并把本次解析结果钉进记录；换了站点则丢弃旧地址 | `extension/home.js` |
 | 权限改为可选（安装时零权限） | 新增 `optional_host_permissions: ["<all_urls>"]`：安装时不弹任何权限警告，只有用户点「查找高清图标」的那一刻才申请读取网页；不授权则跳过那一级，其余功能照常 | `extension/manifest.json` |
+| 图标不再套一圈白边 | 图标位（`.s-ico`）与弹窗预览框原先都带 `border: 1px solid rgba(255,255,255,.14)`，在深色画面里就是每个图标外面那圈白线；现去掉描边，圆角改由 `overflow: hidden` 裁，图标本身铺满整块（全局 `box-sizing: border-box`，尺寸不变）。「添加」按钮的虚线框是有意保留的占位提示，改成自带 `1px dashed` 不受影响 | `extension/home.css` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文

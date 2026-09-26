@@ -105,11 +105,15 @@ html.home-off .home-main {
 .site.dragging { opacity: 0.35; transform: none; }
 .site.drop-in { background: rgba(255, 255, 255, 0.06); }
 
+/* 图标位：不加任何描边 / 外框。
+   之前这里有一条 `border: 1px solid rgba(255,255,255,.14)`，在深色背景上就是
+   每个图标外面那圈白线。图标的圆角靠这里的 overflow:hidden 裁，别再补边框，
+   不然又会长出白边。底色只服务于「还没图」的状态（首字色块、emoji、加载中）。
+   box-sizing 是全局 border-box，去掉 1px 边框后图片实际多占 2px，尺寸不变。 */
 .s-ico {
   width: 58px; height: 58px; border-radius: 17px; overflow: hidden;
   display: grid; place-items: center;
   background: rgba(255, 255, 255, 0.13);
-  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   transition: box-shadow 0.16s;
@@ -138,7 +142,9 @@ html.home-off .home-main {
 .s-tools button.del:hover { background: var(--danger); color: #fff; border-color: transparent; }
 .s-tools svg { width: 11px; height: 11px; }
 
-.site-add .s-ico { background: rgba(255, 255, 255, 0.05); border-style: dashed; border-color: rgba(255, 255, 255, 0.3); box-shadow: none; }
+/* 「添加」按钮是唯一该有描边的：虚线框表示这里还是个占位，得自己写全 border，
+   基础规则已经不提供宽度了 */
+.site-add .s-ico { background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.3); box-shadow: none; }
 .site-add:hover .s-ico { background: rgba(255, 255, 255, 0.13); }
 .site-add .s-ico svg { width: 22px; height: 22px; color: rgba(255, 255, 255, 0.72); }
 .site-add .s-name { color: rgba(255, 255, 255, 0.55); }
@@ -215,7 +221,8 @@ html:not(.home) .home-undo, html.home-off .home-undo { display: none; }
 .hdf-preview {
   flex: none; width: 42px; height: 42px; border-radius: 12px; overflow: hidden;
   display: grid; place-items: center;
-  background: rgba(255, 255, 255, 0.13); border: 1px solid rgba(255, 255, 255, 0.14);
+  /* 跟网格里 .s-ico 一致：不描边，免得预览里也套一圈白线 */
+  background: rgba(255, 255, 255, 0.13);
   font-size: 17px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .hdf-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
