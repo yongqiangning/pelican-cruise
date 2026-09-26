@@ -772,7 +772,8 @@ function launchJumper(x, z) {
   j.dir = rnd() < 0.5 ? 1 : -1;
   j.mesh.visible = true;
   splashAt(x, z, 26);
-  audio.splash();
+  // 鱼跃不出声：水花是 400–2400Hz 的宽带噪声，而背景层（海浪 / 风声 / 胎噪）全在 600Hz 以下，
+  // 它是整个背景里唯一的高频事件，每几秒响一次像在「噼里啪啦」。画面保留，声音去掉。
 }
 function splashAt(x, z, n) {
   const y = waveHeight(x + S.distance, z, S.t, settings.waveAmp);
@@ -798,7 +799,7 @@ function updateJumpers(dt) {
       j.t = -1;
       j.mesh.visible = false;
       splashAt(x, j.z, 18);
-      audio.splash();
+      // 落水同样不出声，理由见 launchJumper
     }
   }
 }
@@ -1168,8 +1169,28 @@ if (NP) {
       if (soundOn) ensureAudio();
       audio.setVolume(soundOn ? settings.volume : 0);
       snd.classList.toggle('on', soundOn);
-      toast(soundOn ? '🔊' : '🔇', soundOn ? '声音：开' : '声音：关', '音乐、海浪风声可在参数面板 → 声音里细调');
+      toast(soundOn ? '🔊' : '🔇', soundOn ? '声音：开' : '声音：关', NP ? '海浪与风声的大小拖旁边的「海浪」滑块' : '音乐、海浪风声可在参数面板 → 声音里细调');
     });
+  }
+  // 海浪 / 风声音量：插件的参数面板是藏起来的（html.wp 下 #guiHost 不显示），
+  // 所以这个滑块是新标签页里唯一能细调环境音的地方。拖到 0 等于静音。
+  const env = $('#npEnv');
+  const envVal = $('#npEnvVal');
+  if (env && envVal && NP.sound) {
+    env.value = String(settings.envVolume);
+    const syncEnv = () => {
+      envVal.textContent = String(Math.round(+env.value * 100));
+    };
+    env.addEventListener('input', () => {
+      ensureAudio(); // 拖动也算用户手势，可以借此启动音频
+      settings.envVolume = +env.value;
+      settings.envOn = settings.envVolume > 0;
+      audio.setEnvVolume(settings.envVolume);
+      audio.setEnv(settings.envOn);
+      setEnvButton();
+      syncEnv();
+    });
+    syncEnv();
   }
   // 配置里关掉的组直接藏起来（默认全开）
   for (const [key, cls] of Object.entries({ speed: '.np-speed', tod: '.np-tod', acts: '.np-acts', cams: '.np-cams', sound: '.np-sound' })) {

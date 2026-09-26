@@ -160,6 +160,8 @@ body.hide-ui .npbar { display: none !important; }
 .npbar label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
 .npbar input[type="range"] { -webkit-appearance: none; appearance: none; width: 128px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); outline: none; cursor: pointer; }
 .npbar input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.45); cursor: pointer; }
+.npbar #npEnv { width: 96px; } /* 海浪音量滑块窄一点，免得控制条太早折行 */
+.npbar #npEnvVal { min-width: 22px; } /* 读数只有两位数，不用留速度那种宽度 */
 .npbar .np-read { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 700; min-width: 32px; text-align: right; }
 .npbar .np-unit { font-size: 11px; color: var(--muted); }
 .npbar button { border: 1px solid var(--stroke); background: rgba(255,255,255,0.06); color: var(--muted); cursor: pointer; padding: 7px 12px; border-radius: 999px; font-size: 12.5px; white-space: nowrap; transition: all 0.15s; }
@@ -351,6 +353,9 @@ body.hide-ui .npbar { display: none !important; }
   </div>
   <div class="np-group np-sound">
     <button id="npSound" title="声音开关（默认关，点了才出声）">声音</button>
+    <label for="npEnv" title="海浪与风声的音量，拖到 0 就是静音">海浪</label>
+    <input type="range" id="npEnv" min="0" max="1" step="0.05" value="0.5" />
+    <b class="np-read" id="npEnvVal">50</b><span class="np-unit">%</span>
   </div>
 </div>
 <div id="toasts"></div>

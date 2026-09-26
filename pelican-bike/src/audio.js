@@ -156,6 +156,24 @@ export class AudioEngine {
     return s;
   }
 
+  // 一次性声音响完必须自己从音频图上摘下来——Web Audio 不会回收仍然连着总线的节点，
+  // 而这里的每个音符、每个音效都是新建节点接到常驻总线上的。不摘的后果是节点只增不减：
+  // 音乐每换一次和弦新建二十来个，音效每个再加三四个，实测每分钟累积 250 个左右，
+  // 挂机一小时就是上万个，音频线程的图遍历和内存开销一路涨，听感上就是隔一阵「啪」一下。
+  // 挂在源节点的 onended 上：它 stop() 之后才触发，此时断线不会截断声音。
+  dispose(src, ...rest) {
+    const all = [src, ...rest];
+    src.onended = () => {
+      for (const n of all) {
+        try {
+          n.disconnect();
+        } catch {
+          // 已经断过或节点已销毁，忽略
+        }
+      }
+    };
+  }
+
   setVolume(v) {
     this.volume = v;
     if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
@@ -297,6 +315,7 @@ export class AudioEngine {
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
     s.connect(f).connect(g).connect(this.sfx);
+    this.dispose(s, f, g);
     s.start(t, Math.random(), 0.03);
   }
 
@@ -312,6 +331,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(dest || this.sfx);
+    this.dispose(o, g);
     o.start(t);
     o.stop(t + dur + 0.05);
     return g;
@@ -361,12 +381,15 @@ export class AudioEngine {
     o.connect(f2).connect(g);
     g.connect(this.sfx);
     g.connect(this.reverb);
+    this.dispose(o, vib, vg, f1, f2, g);
     o.start(t);
     vib.start(t);
     o.stop(t + 0.55);
     vib.stop(t + 0.55);
   }
 
+  // 鱼跃水花。目前没有调用点：它在背景里是唯一的高频宽带噪声，每隔几秒响一次很吵，
+  // 已经按要求去掉（画面上的水花粒子还留着）。要恢复就在 main.js 的 launchJumper / 落水处各加一行 audio.splash()。
   splash() {
     if (!this.enabled) return;
     const ctx = this.ctx;
@@ -383,6 +406,7 @@ export class AudioEngine {
     const pan = ctx.createStereoPanner();
     pan.pan.value = -0.5;
     s.connect(f).connect(g).connect(pan).connect(this.sfx);
+    this.dispose(s, f, g, pan);
     s.start(t, Math.random(), 0.6);
   }
 
@@ -409,6 +433,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.35, t + 0.15);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
     s.connect(f).connect(g).connect(this.sfx);
+    this.dispose(s, f, g);
     s.start(t, Math.random(), 0.6);
   }
 
@@ -421,6 +446,7 @@ export class AudioEngine {
     out.gain.value = 0.025;
     out.connect(pan).connect(this.sfx);
     out.connect(this.reverb);
+    const chain = [out, pan];
     for (let i = 0; i < n; i++) {
       const s = t + i * 0.3;
       const o = ctx.createOscillator();
@@ -437,6 +463,9 @@ export class AudioEngine {
       g.gain.exponentialRampToValueAtTime(1, s + 0.05);
       g.gain.exponentialRampToValueAtTime(0.0001, s + 0.26);
       o.connect(f).connect(g).connect(out);
+      // 叫声可能是两声（i = 0,1），等最后一声放完再整串摘下来
+      chain.push(o, f, g);
+      if (i === n - 1) this.dispose(o, ...chain);
       o.start(s);
       o.stop(s + 0.32);
     }
