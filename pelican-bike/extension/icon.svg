@@ -1,0 +1,13 @@
+<!--
+  插件图标的单一来源。图形与 index.template.html 里内联的 <link rel="icon"> 完全一致
+  （白身鹈鹕 + 青蓝车轮 + 橙喙，透明底），改这里之后跑 tools/make-icons.sh 重出 4 个尺寸。
+  注意：游戏 / 壁纸那两份 HTML 是单文件分发，favicon 必须内联 data URI，
+  所以那边是一份拷贝，改动时要一起同步。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <circle cx="16" cy="48" r="11" fill="none" stroke="#138a8a" stroke-width="5" />
+  <circle cx="48" cy="48" r="11" fill="none" stroke="#138a8a" stroke-width="5" />
+  <ellipse cx="26" cy="26" rx="13" ry="9" fill="#f6f3ec" />
+  <circle cx="38" cy="12" r="6" fill="#f6f3ec" />
+  <path d="M42 11 L62 17 L42 17 Z" fill="#f5b857" />
+</svg>

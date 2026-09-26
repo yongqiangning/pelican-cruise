@@ -48,6 +48,23 @@ const extHomeHead = `<!-- 桌面层：结构见 build.mjs 注入的片段，样�
 <script src="home-boot.js"></script>`;
 
 const tpl = readFileSync('index.template.html', 'utf8');
+
+// 插件图标（extension/icon*.png）是从 extension/icon.svg 渲出来的，而网页的 favicon 内联在模板里，
+// 同一只鹈鹕存了两份（网页要能单文件分发，favicon 不能外链）。只改一边的话，标签页上看到的
+// 和插件图标就不是同一只了。这里顺手比一比，只提醒不报错。
+const normSvg = (s) =>
+  s
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/"/g, "'")
+    .replace(/\s*\/>/g, '/>')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+/g, ' ')
+    .trim();
+const favInTpl = tpl.match(/<link rel="icon" href="data:image\/svg\+xml,([^"]+)"/)?.[1];
+if (favInTpl && normSvg(decodeURIComponent(favInTpl)) !== normSvg(readFileSync('extension/icon.svg', 'utf8'))) {
+  console.warn('⚠ index.template.html 里的 favicon 与 extension/icon.svg 不一致了，插件图标需要重新生成：node tools/render-icons.mjs');
+}
+
 const og = process.env.OG_IMAGE ? `<meta property="og:image" content="${process.env.OG_IMAGE}" />` : '';
 const render = (configTag, title, jsBlock) =>
   tpl

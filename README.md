@@ -79,6 +79,8 @@
 | 新标签页桌面层 | 新标签页加了时钟（带农历，用浏览器内置中国历法）、搜索框（引擎可切、网址自动识别直开）、可增删拖拽的快捷网址（删错 8 秒撤销、图标自动降级为首字色块），以及右上角树叶一键收起（状态持久化、首帧同步所以不闪）；焦点在输入框 / 按钮时游戏让开键盘，且不再每次开标签页弹提示；桌面层只随插件产物构建，游戏版与壁纸版一个字节都不带 | `extension/home.html` `home.css` `home.js` `home-boot.js` `build.mjs` |
 | 控制条快捷键浮窗 | 控制条「晚上」右边新增 <kbd>⌨</kbd> **快捷键** 按钮：鼠标悬浮浮出 17 条快捷键表（<kbd>U</kbd> 显示 / 隐藏菜单排第一条），点一下钉住、<kbd>Esc</kbd> 或点面板外收起。浮窗挂在控制条而非按钮上——按钮会跟着 `flex-wrap` 换行，粘在按钮上的浮窗在窄窗口下会从左边溢出屏幕；窗口很矮时列表自动变可滚动。顺带把 `ui` 对象写法改成与默认值合并，于是 `{ keys: false }` 只藏这一个按钮 | `main.js` `index.template.html` `EXTENSION.md` |
 | 构建自动压 zip | 每次构建顺手把 `dist/extension/` 压成 `pelican-newtab-extension.zip`，不再需要手工打包（纯 Node 手写，不调系统 `zip` 命令，Windows 也能构建；时间戳写死，产物可复现） | `build.mjs` |
+| 插件图标与标签页 favicon 统一 | 插件原先另有一套深色底的 PNG 图标，和标签页上那只（透明底、青蓝车轮、米白身体）不是同一个；现把模板里内联的 favicon SVG 抽成 `extension/icon.svg` 作为单一来源，由它渲出 16/32/48/128 四张透明 PNG 替换旧图。构建时顺带比对模板 favicon 与 `icon.svg`，只改一边会打印提醒 | `extension/icon.svg` `extension/icon*.png` `tools/render-icons.mjs` `build.mjs` |
+| 快捷网址图标变清晰 | 桌面层图标原先只去站点根路径取 `/favicon.ico`，多数站点的 favicon 只有 16–32px，放到约 64px 的图标位就被放大糊掉；现在按「手动设置的 icon → 默认站点自带的高清图 → `apple-touch-icon.png` → `apple-touch-icon-precomposed.png` → favicon.ico → 首字色块」逐级探测（纯 `<img>` 依次尝试，不加任何主机权限），老用户已有数据按 URL 只补缺、不动其它 | `extension/home.js` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文
@@ -162,8 +164,10 @@ node build.mjs    # 输出 dist/index.html（游戏）、dist/wallpaper.html（�
 ├── EXTENSION.md            # 浏览器插件（新标签页）的安装与调参说明
 └── pelican-bike/           # 鹈鹕骑自行车
     ├── src/                # 11 个模块：pelican / bicycle / ocean / fish / sky / effects / audio ...
-    ├── extension/          # 插件资源：manifest.json + icon16/32/48/128.png，
+    ├── extension/          # 插件资源：manifest.json + icon.svg（图标单一来源，与页面 favicon 同一只）
+    │                       # 及其渲出的 icon16/32/48/128.png，
     │                       # 以及桌面层的 home.html（片段）/ home.css / home.js / home-boot.js
+    ├── tools/              # 离线小工具：render-icons.mjs（把 icon.svg 渲成 4 个尺寸 PNG，改图标时才跑）
     ├── index.template.html # 页面模板（构建时注入 og:image 与打包后的 JS）
     ├── build.mjs           # esbuild 构建脚本，一次产出 index.html + wallpaper.html + extension/
     └── package.json

@@ -40,9 +40,10 @@
   ];
 
   // 第一次打开时给一批常用站点，之后完全由用户增删（删光了也不会自己长回来）
+  // hi = 该站官方高清图标（首页 <link rel="apple-touch-icon"> 里抄出来的），/favicon.ico 只有 16~32px，放大就糊
   const DEFAULT_SITES = [
-    { name: '百度', url: 'https://www.baidu.com' },
-    { name: 'B 站', url: 'https://www.bilibili.com' },
+    { name: '百度', url: 'https://www.baidu.com', hi: 'https://psstatic.cdn.bcebos.com/video/wiseindex/aa6eef91f8b5b1a33b454c401_1660835115000.png' },
+    { name: 'B 站', url: 'https://www.bilibili.com', hi: 'https://i0.hdslb.com/bfs/static/jinkela/long/images/512.png' },
     { name: '知乎', url: 'https://www.zhihu.com' },
     { name: '小红书', url: 'https://www.xiaohongshu.com' },
     { name: '淘宝', url: 'https://www.taobao.com' },
@@ -50,8 +51,8 @@
     { name: '抖音', url: 'https://www.douyin.com' },
     { name: '豆瓣', url: 'https://www.douban.com' },
     { name: 'GitHub', url: 'https://github.com' },
-    { name: 'YouTube', url: 'https://www.youtube.com' },
-    { name: 'DeepSeek', url: 'https://chat.deepseek.com' },
+    { name: 'YouTube', url: 'https://www.youtube.com', hi: 'https://www.youtube.com/img/favicon_144x144.png' },
+    { name: 'DeepSeek', url: 'https://chat.deepseek.com', hi: 'https://fe-static.deepseek.com/chat/icon-180.png' },
     { name: '通义千问', url: 'https://tongyi.aliyun.com' },
   ];
 
@@ -209,11 +210,37 @@
 
   let sites = read(KEY.sites, null);
   const firstRun = !Array.isArray(sites);
-  if (firstRun) sites = DEFAULT_SITES.map((s) => ({ ...s }));
+  if (firstRun) {
+    sites = DEFAULT_SITES.map((s) => ({ ...s }));
+  } else {
+    // 老用户升级：按 URL 给存量站点补默认站点新加的 hi 字段（只补缺，不动用户数据）
+    const hiByUrl = new Map(DEFAULT_SITES.filter((s) => s.hi).map((s) => [s.url.replace(/\/+$/, ''), s.hi]));
+    for (const s of sites) {
+      if (s && !s.hi && !String(s.icon || '').trim()) {
+        const hi = hiByUrl.get(String(s.url || '').replace(/\/+$/, ''));
+        if (hi) s.hi = hi;
+      }
+    }
+  }
   let dragEl = null;
   let undoTimer = 0;
   let undoSite = null;
 
+  function iconSources(site) {
+    const out = [];
+    const icon = String(site.icon || '').trim();
+    if (icon && /^(?:https?:|data:)/i.test(icon)) out.push(icon);
+    // 手动设置的 icon 优先，其次默认站点自带的高清图，再往下按固定路径探测
+    else if (site.hi) out.push(site.hi);
+    const host = hostOf(site.url);
+    if (host) {
+      // apple-touch-icon 一般 180x180 起步，比 favicon.ico（16/32px）清晰得多
+      out.push(`https://${host}/apple-touch-icon.png`);
+      out.push(`https://${host}/apple-touch-icon-precomposed.png`);
+      out.push(`https://${host}/favicon.ico`);
+    }
+    return out;
+  }
   function paintIcon(box, site) {
     box.textContent = '';
     box.style.background = '';
@@ -226,22 +253,27 @@
       box.appendChild(span);
       return;
     }
-    const host = hostOf(site.url);
-    const src = /^(?:https?:|data:)/i.test(icon) ? icon : host ? `https://${host}/favicon.ico` : '';
-    if (!src) return paintLetter(box, site);
-    const img = new Image();
-    img.alt = '';
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    img.style.visibility = 'hidden'; // 加载好再露面，免得先闪一个破图
-    img.addEventListener('load', () => {
-      box.textContent = '';
-      box.style.background = '';
-      img.style.visibility = 'visible';
-      box.appendChild(img);
-    });
-    img.addEventListener('error', () => paintLetter(box, site));
-    img.src = src;
+    const srcs = iconSources(site);
+    if (!srcs.length) return paintLetter(box, site);
+    let i = 0;
+    const tryNext = () => {
+      const src = srcs[i++];
+      if (!src) return paintLetter(box, site);
+      const img = new Image();
+      img.alt = '';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.style.visibility = 'hidden'; // 加载好再露面，免得先闪一个破图
+      img.addEventListener('load', () => {
+        box.textContent = '';
+        box.style.background = '';
+        img.style.visibility = 'visible';
+        box.appendChild(img);
+      });
+      img.addEventListener('error', tryNext);
+      img.src = src;
+    };
+    tryNext();
   }
   function paintLetter(box, site) {
     box.textContent = '';
