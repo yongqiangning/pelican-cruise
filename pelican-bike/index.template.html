@@ -194,7 +194,8 @@ body.hide-ui .npbar { display: none !important; }
 /* ---------- 快捷键一览（控制条右端那个按钮） ----------
    浮窗挂在 #npbar 上（不是挂在按钮里）：按钮会跟着 flex-wrap 换行，粘在按钮上的话
    窗口一窄就会从左边溢出屏幕；粘在控制条右上角则永远贴着右边缘往回展开。 */
-.npbar .np-keys > button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; }
+/* 「快捷键」只留图标 → 做成正方块，用 padding:0 + flex 居中，让图标落在视觉中心 */
+.npbar .np-keys > button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; }
 .npbar .np-keys svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .npbar .np-keys > button[aria-expanded="true"] { color: #fff; background: rgba(255,255,255,0.15); }
 .np-keys-tip { position: absolute; right: 0; bottom: 100%; padding-bottom: 11px; width: min(480px, calc(100vw - 40px)); opacity: 0; visibility: hidden; transform: translateY(6px); transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s; pointer-events: none; }
@@ -218,7 +219,7 @@ html:not(.home) .np-keys-tip .k-home { display: none; } /* 没开桌面层就不
    按钮会跟着行内折行挪位置，粘在按钮上的浮窗会从屏幕边缘露出去。
    区别只在于这个浮窗一律点击开合、不用 hover 触发 —— 里面要搁滑块和文件选择，
    鼠标一离开就收起的话没法操作。 */
-.npbar .np-music > button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; }
+.npbar .np-music > button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; }
 .npbar .np-music svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .npbar .np-music > button[aria-expanded="true"] { color: #fff; background: rgba(255,255,255,0.15); }
 .np-music-tip { position: absolute; right: 0; bottom: 100%; padding-bottom: 11px; width: min(340px, calc(100vw - 40px)); opacity: 0; visibility: hidden; transform: translateY(6px); transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s; pointer-events: none; }
@@ -243,6 +244,7 @@ html:not(.home) .np-keys-tip .k-home { display: none; } /* 没开桌面层就不
   .np-row { gap: 5px 10px; }
   .npbar input[type="range"] { width: 84px; }
   .npbar button { padding: 6px 9px; font-size: 12px; }
+  .npbar .np-keys > button, .npbar .np-music > button { width: 30px; height: 30px; }
   .np-keys-list { gap: 5px 12px; }
   .np-keys-list > div { grid-template-columns: 52px 1fr; font-size: 12px; }
 }
@@ -253,6 +255,7 @@ html:not(.home) .np-keys-tip .k-home { display: none; } /* 没开桌面层就不
   .npbar input[type="range"] { width: 48px; }
   .npbar #npEnv { width: 42px; }
   .npbar button { padding: 5px 7px; font-size: 11.5px; }
+  .npbar .np-keys > button, .npbar .np-music > button { width: 28px; height: 28px; }
   .npbar label { font-size: 11px; letter-spacing: 0; }
   .npbar .np-read { font-size: 12px; min-width: 26px; }
   .npbar .np-unit { display: none; }
@@ -426,9 +429,8 @@ html:not(.home) .np-keys-tip .k-home { display: none; } /* 没开桌面层就不
       <button data-time="night">晚上</button>
     </div>
     <div class="np-group np-keys">
-      <button id="npKeys" type="button" aria-haspopup="true" aria-expanded="false" title="键盘快捷键一览">
+      <button id="npKeys" type="button" aria-haspopup="true" aria-expanded="false" aria-label="键盘快捷键一览" title="键盘快捷键一览">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.2" y="6" width="19.6" height="12" rx="2.8" /><path d="M5.6 10h.02M9.2 10h.02M12.8 10h.02M16.4 10h.02" /><path d="M8 14h8" /></svg>
-        <span>快捷键</span>
       </button>
     </div>
   </div>
@@ -453,9 +455,8 @@ html:not(.home) .np-keys-tip .k-home { display: none; } /* 没开桌面层就不
       <b class="np-read" id="npEnvVal">50</b><span class="np-unit">%</span>
     </div>
     <div class="np-group np-music">
-      <button id="npMusicBtn" type="button" aria-haspopup="true" aria-expanded="false" title="背景音乐：内置氛围乐，或者上传自己的歌">
+      <button id="npMusicBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="背景音乐：内置氛围乐，或者上传自己的歌" title="背景音乐：内置氛围乐，或者上传自己的歌">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.4V5.8l10-1.9v11.5" /><circle cx="6.7" cy="17.6" r="2.5" /><circle cx="16.7" cy="15.4" r="2.5" /></svg>
-        <span>音乐</span>
       </button>
     </div>
   </div>
