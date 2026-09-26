@@ -30,8 +30,11 @@ html.home-off .home-main {
 /* 时钟：白字 + 投影，落日和深夜的画面里都读得清 */
 /* 白字要压得住清晨那种亮画面，所以投影给得比常规狠一些 */
 .home-clock { text-align: center; text-shadow: 0 3px 34px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.42); }
-.hc-time { font-size: clamp(50px, 9.2vw, 124px); font-weight: 200; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.hc-date { margin-top: 0.55em; font-size: clamp(12.5px, 1.1vw, 16px); color: rgba(255, 255, 255, 0.9); letter-spacing: 0.1em; }
+/* 时钟别做太大：它下面还要放搜索框和一整片快捷网址网格，
+   字号定得太大（原来 9.2vw / 撑到 124px）会把搜索框和网格一路往下挤。
+   现在大约是原来的 2/3（1080 宽窗口下 99px → 71px）。 */
+.hc-time { font-size: clamp(38px, 6.6vw, 90px); font-weight: 200; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.hc-date { margin-top: 0.5em; font-size: clamp(12px, 1.05vw, 15px); color: rgba(255, 255, 255, 0.9); letter-spacing: 0.1em; }
 
 /* ---------- 搜索框 ---------- */
 .home-search {
@@ -247,6 +250,6 @@ html:not(.home) .home-undo, html.home-off .home-undo { display: none; }
   #homeLeaf { top: 10px; right: 10px; }
 }
 @media (max-height: 620px) {
-  .hc-time { font-size: clamp(38px, 8vw, 72px); }
+  .hc-time { font-size: clamp(30px, 5.4vw, 58px); }
   .home-sites { max-height: 34vh; }
 }
