@@ -86,6 +86,7 @@
 | 图标不再套一圈白边 | 图标位（`.s-ico`）与弹窗预览框原先都带 `border: 1px solid rgba(255,255,255,.14)`，在深色画面里就是每个图标外面那圈白线；现去掉描边，圆角改由 `overflow: hidden` 裁，图标本身铺满整块（全局 `box-sizing: border-box`，尺寸不变）。「添加」按钮的虚线框是有意保留的占位提示，改成自带 `1px dashed` 不受影响 | `extension/home.css` |
 | 时钟字号调小 | 新标签页时钟原为 `clamp(50px, 9.2vw, 124px)`（1280 宽时长边 118px），把搜索框和快捷网址网格一路往下挤；现改为 `clamp(38px, 6.6vw, 90px)`（同时段/日期字号与间距同步收一点，矮窗口 `max-height: 620px` 那条也按同比例降到 `clamp(30px, 5.4vw, 58px)`）。实测 1280×800 下时钟 118→84px、网格首行上移 36px；1920×1080 下 124→90px | `extension/home.css` |
 | 修「鼠标指针在弹窗里消失」 | 壁纸模式为了干净用 `html.wp body { cursor: none }` 藏掉鼠标，而插件里「解禁」的那条只写在 `html` 上（`html.wp.wpui`）——视口是 body 铺满的，body 的计算值仍是 `none` 并继承给所有没显式声明光标的后代，于是只有按钮和链接（`pointer`）能露出光标，编辑弹窗的提示/状态文字、控制条标签这些纯文字区就成了「鼠标走过去就没了」。现改为 `:is(html.wp.wpui, html.home) body { cursor: default }`（`html` 自身那条一并保留），输入框单独 `cursor: auto`，否则打字时显示箭头而不是 I 形；关掉控制条只留桌面层同样生效，两者都关（纯画面）仍保持隐藏 | `index.template.html` |
+| 控制条锁定两行 | 原先六组控件同在一个 `flex-wrap` 容器里自由折行，加上「海浪」滑块后固定折成三行、还把画面往上顶。真正的病根是 `.npbar` 用 `left: 50%` + `translateX(-50%)` 居中——固定定位元素的 shrink-to-fit 宽度按「containing block 宽 − left」算，`left` 吃掉一半，1280 的窗口里只有 640px 可用。现改成 `left/right: 0` + `margin-inline: auto` + `width: fit-content`：同样居中、可用宽度却是整屏（两侧各留 16px），并顺手去掉了 `transform`（不再成为内部 fixed 元素的包含块）。HTML 里把六组固定分成两个 `.np-row`，每行内部 `nowrap`，**结构上不可能出现第三行**；窄窗口先把控件压小（`max-width: 820px / 680px` 两档压缩滑块与按钮），极端窄时退化为行内隐形横向滚动。实测 1920 / 1600 / 1440 / 1280 / 1152 / 1024 / 900 / 820 / 768 / 680 / 600 共 11 种宽度全部两行、无纵向溢出 | `index.template.html` |
 | 修正 npm 源 | `package-lock.json` 记录的是作者内网镜像，本机不可达；构建改用可达源（见下） | — |
 
 ## 提示词原文
